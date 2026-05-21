@@ -63,7 +63,7 @@
         },
         "new_codes": {
           "title": "Paste the captured codes",
-          "description": "Paste one code per line in the format `name: code`, exactly like the 7Config command list.\n\nExpected {count} commands: {expected}\n\nExample:\n{example}",
+          "description": "Paste one code per line in the format `name: sendir,1:8,...`, copied directly from 7Config. The integration automatically strips the `sendir,1:X` prefix.\n\nExpected {count} commands: {expected}\n\nExample:\n{example}",
           "data": {
             "codes": "Codes"
           }
@@ -107,6 +107,13 @@
       },
       "abort": {
         "unknown_device": "The device definition could not be found."
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connectivity": {
+        "name": "Connectivity"
       }
     }
   },

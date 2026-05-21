@@ -233,7 +233,11 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             elif not user_input["fan_modes"]:
                 errors["base"] = "no_fan_modes"
             else:
-                self._new_meta = dict(user_input)
+                self._new_meta = {
+                    **user_input,
+                    "min_temp": int(user_input["min_temp"]),
+                    "max_temp": int(user_input["max_temp"]),
+                }
                 return await self.async_step_new_codes()
 
         schema = vol.Schema(
@@ -248,11 +252,23 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
                         translation_key="power_behavior",
                     )
                 ),
-                vol.Required("min_temp", default=16): vol.All(
-                    int, vol.Range(min=10, max=32)
+                vol.Required("min_temp", default=16): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=10,
+                        max=32,
+                        step=1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
                 ),
-                vol.Required("max_temp", default=30): vol.All(
-                    int, vol.Range(min=10, max=32)
+                vol.Required("max_temp", default=30): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=10,
+                        max=32,
+                        step=1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
                 ),
                 vol.Required(
                     "fan_modes", default=list(DB_FAN_MODES)
@@ -327,7 +343,10 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             + (["swing_on", "swing_off"] if meta["swing_mode"] == SWING_SEPARATE else [])
             + expected_state_keys(fan_modes, min_temp, max_temp)
         )
-        placeholder = "\n".join(f"{name}: " for name in expected[:6]) + "\n..."
+        placeholder = (
+            "\n".join(f"{name}: sendir,1:8,1,38000,..." for name in expected[:6])
+            + "\n..."
+        )
 
         schema = vol.Schema(
             {
@@ -360,6 +379,10 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
 
         errors: dict[str, str] = {}
 
+        # Quando o aparelho vem do wizard de nova definição, power_behavior já
+        # foi escolhido na etapa new_meta — não precisa ser perguntado de novo.
+        from_wizard = bool(self._new_meta)
+
         if user_input is not None:
             data: dict[str, Any] = {
                 CONF_DEVICE_TYPE: self._device_type,
@@ -367,7 +390,9 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
                 CONF_BRAND: definition.brand,
                 CONF_MODEL: definition.model,
                 CONF_IR_PORT: user_input[CONF_IR_PORT],
-                CONF_POWER_BEHAVIOR: user_input[CONF_POWER_BEHAVIOR],
+                CONF_POWER_BEHAVIOR: user_input.get(
+                    CONF_POWER_BEHAVIOR, definition.power_behavior
+                ),
                 CONF_ON_DELAY: user_input.get(CONF_ON_DELAY, DEFAULT_ON_DELAY),
                 CONF_ENABLED_HVAC_MODES: user_input.get(
                     CONF_ENABLED_HVAC_MODES, definition.hvac_modes
@@ -385,7 +410,8 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
                 title=user_input[CONF_NAME].strip(), data=data
             )
 
-        schema = _build_configure_schema(definition, defaults=None)
+        skip = {CONF_POWER_BEHAVIOR} if from_wizard else set()
+        schema = _build_configure_schema(definition, defaults=None, skip_fields=skip)
         return self.async_show_form(
             step_id="configure",
             data_schema=schema,
@@ -451,10 +477,13 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
 
 
 def _build_configure_schema(
-    definition: Any, defaults: dict[str, Any] | None
+    definition: Any,
+    defaults: dict[str, Any] | None,
+    skip_fields: set[str] | None = None,
 ) -> vol.Schema:
     """Monta o schema do passo de configuração do aparelho."""
     defaults = defaults or {}
+    skip = skip_fields or set()
 
     fields: dict[Any, Any] = {
         vol.Required(
@@ -465,29 +494,36 @@ def _build_configure_schema(
             CONF_IR_PORT,
             default=defaults.get(CONF_IR_PORT, MIN_IR_PORT),
         ): vol.All(int, vol.Range(min=MIN_IR_PORT, max=MAX_IR_PORT)),
-        vol.Required(
-            CONF_POWER_BEHAVIOR,
-            default=defaults.get(
-                CONF_POWER_BEHAVIOR, definition.power_behavior
-            ),
-        ): selector.SelectSelector(
+    }
+
+    if CONF_POWER_BEHAVIOR not in skip:
+        fields[
+            vol.Required(
+                CONF_POWER_BEHAVIOR,
+                default=defaults.get(
+                    CONF_POWER_BEHAVIOR, definition.power_behavior
+                ),
+            )
+        ] = selector.SelectSelector(
             selector.SelectSelectorConfig(
                 options=list(POWER_BEHAVIORS),
                 translation_key="power_behavior",
             )
-        ),
+        )
+
+    fields[
         vol.Optional(
             CONF_ON_DELAY,
             default=defaults.get(CONF_ON_DELAY, DEFAULT_ON_DELAY),
-        ): vol.All(
-            selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0.0, max=5.0, step=0.1,
-                    unit_of_measurement="s", mode=selector.NumberSelectorMode.BOX,
-                )
-            ),
+        )
+    ] = vol.All(
+        selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0.0, max=5.0, step=0.1,
+                unit_of_measurement="s", mode=selector.NumberSelectorMode.BOX,
+            )
         ),
-    }
+    )
 
     # Modos HVAC: só aparece se a definição tiver mais de um modo.
     if len(definition.hvac_modes) > 1:
