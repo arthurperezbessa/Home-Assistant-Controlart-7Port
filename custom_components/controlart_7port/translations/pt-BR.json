@@ -63,7 +63,7 @@
         },
         "new_codes": {
           "title": "Cole os códigos capturados",
-          "description": "Cole um código por linha no formato `nome: código`, igual à lista de comandos do 7Config.\n\nComandos esperados ({count}): {expected}\n\nExemplo:\n{example}",
+          "description": "Cole um código por linha no formato `nome: sendir,1:8,...`, copiando diretamente do 7Config. A integração extrai automaticamente o prefixo `sendir,1:X`.\n\nComandos esperados ({count}): {expected}\n\nExemplo:\n{example}",
           "data": {
             "codes": "Códigos"
           }
@@ -107,6 +107,13 @@
       },
       "abort": {
         "unknown_device": "A definição do dispositivo não foi encontrada."
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connectivity": {
+        "name": "Conectividade"
       }
     }
   },
