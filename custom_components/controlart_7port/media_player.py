@@ -154,8 +154,10 @@ class SevenPortTV(MediaPlayerEntity, RestoreEntity):
             via_device=(DOMAIN, entry_id),
         )
 
-        # Sources definidos pelo usuário (com códigos IR).
-        self._attr_source_list = list(definition.source_list)
+        # Sources IR definidos pelo usuário (prioridade na lista mesclada).
+        self._ir_sources: list[str] = list(definition.source_list)
+        self._ir_source_set: set[str] = set(self._ir_sources)
+        self._attr_source_list: list[str] = list(self._ir_sources)
 
         # Estado inicial — off até a backing entity ser consultada.
         self._attr_state = MediaPlayerState.OFF
@@ -170,7 +172,7 @@ class SevenPortTV(MediaPlayerEntity, RestoreEntity):
             MediaPlayerEntityFeature.TURN_ON
             | MediaPlayerEntityFeature.TURN_OFF
         )
-        if self._attr_source_list:
+        if self._ir_sources:
             base |= MediaPlayerEntityFeature.SELECT_SOURCE
         self._base_features = base
         self._attr_supported_features = base
@@ -213,6 +215,7 @@ class SevenPortTV(MediaPlayerEntity, RestoreEntity):
             self._attr_is_volume_muted = None
             self._attr_media_title = None
             self._attr_app_name = None
+            self._attr_source_list = list(self._ir_sources)
             self._attr_supported_features = self._base_features
             return
 
@@ -225,12 +228,20 @@ class SevenPortTV(MediaPlayerEntity, RestoreEntity):
         self._attr_media_title = attrs.get("media_title")
         self._attr_app_name = attrs.get("app_name")
 
+        # Mescla sources IR (prioridade) + sources da backing entity não cobertos por IR.
+        backing_sources: list[str] = list(attrs.get("source_list") or [])
+        extra = [s for s in backing_sources if s not in self._ir_source_set]
+        self._attr_source_list = list(self._ir_sources) + extra
+
         # Espelha as features de volume e mídia da backing entity.
         backing_features = int(attrs.get("supported_features") or 0)
-        self._attr_supported_features = (
+        features = (
             self._base_features
             | (backing_features & (_VOLUME_FEATURES | _MEDIA_FEATURES))
         )
+        if self._attr_source_list:
+            features |= MediaPlayerEntityFeature.SELECT_SOURCE
+        self._attr_supported_features = features
 
     # -- Comandos IR -----------------------------------------------------------
 
