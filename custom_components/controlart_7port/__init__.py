@@ -20,7 +20,7 @@ from .tcp import SevenPortClient
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.CLIMATE, Platform.MEDIA_PLAYER]
+PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.CLIMATE, Platform.COVER, Platform.MEDIA_PLAYER]
 
 type SevenPortConfigEntry = ConfigEntry["SevenPortRuntimeData"]
 

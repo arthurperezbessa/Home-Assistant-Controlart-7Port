@@ -25,14 +25,18 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import slugify
 
 from .const import (
+    CMD_CLOSE,
     CMD_LIGHT_OFF,
+    CMD_OPEN,
     CMD_POWER_OFF,
     CMD_POWER_ON,
+    CMD_STOP,
     CMD_SWING_OFF,
     CMD_SWING_ON,
     DB_FAN_MODES,
     DB_HVAC_MODES,
     DEVICE_TYPE_CLIMATE,
+    DEVICE_TYPE_COVER,
     DEVICE_TYPE_TV,
     DOMAIN,
     POWER_BEHAVIORS,
@@ -514,6 +518,70 @@ def build_tv_definition(
     }
 
 
+def parse_cover_code_block(text: str) -> CodeParseResult:
+    """Analisa um bloco de texto com códigos de cortina/persiana.
+
+    Formato esperado — uma linha por comando::
+
+        open:  sendir,1:8,...
+        close: sendir,1:8,...
+        stop:  sendir,1:8,...   # opcional
+
+    Aceita sinônimos em português.
+    """
+    _ALIASES: dict[str, str] = {
+        "open": CMD_OPEN, "abrir": CMD_OPEN, "abre": CMD_OPEN,
+        "close": CMD_CLOSE, "fechar": CMD_CLOSE, "fecha": CMD_CLOSE,
+        "stop": CMD_STOP, "parar": CMD_STOP, "para": CMD_STOP,
+    }
+
+    result = CodeParseResult()
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            result.errors.append(f"Linha {lineno}: faltou ':' — '{line[:40]}'")
+            continue
+        name, _, value = line.partition(":")
+        name = name.strip()
+        code = normalize_code(value)
+        if not code:
+            result.errors.append(f"Linha {lineno}: código vazio para '{name}'")
+            continue
+        cmd = _ALIASES.get(name.lower())
+        if cmd is not None:
+            result.commands[cmd] = code
+        else:
+            result.unknown.append(name)
+
+    return result
+
+
+def build_cover_definition(
+    *,
+    device_id: str,
+    brand: str,
+    model: str,
+    parsed: CodeParseResult,
+) -> dict[str, Any]:
+    """Monta o dicionário de definição de uma cortina/persiana."""
+    commands: dict[str, Any] = {
+        CMD_OPEN: parsed.commands.get(CMD_OPEN),
+        CMD_CLOSE: parsed.commands.get(CMD_CLOSE),
+    }
+    stop = parsed.commands.get(CMD_STOP)
+    if stop:
+        commands[CMD_STOP] = stop
+    return {
+        "id": device_id,
+        "brand": brand,
+        "model": model,
+        "device_type": DEVICE_TYPE_COVER,
+        "commands": commands,
+    }
+
+
 def definition_to_yaml(definition: dict[str, Any]) -> str:
     """Serializa uma definição em YAML (para o usuário contribuir no repo)."""
 
@@ -572,10 +640,12 @@ __all__ = [
     "DeviceDefinition",
     "async_get_database",
     "build_climate_definition",
+    "build_cover_definition",
     "build_tv_definition",
     "definition_to_yaml",
     "expected_state_keys",
     "normalize_code",
     "parse_code_block",
+    "parse_cover_code_block",
     "parse_tv_code_block",
 ]
