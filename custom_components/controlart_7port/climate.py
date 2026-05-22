@@ -47,6 +47,7 @@ from .const import (
     CONF_ENABLE_SWING,
     CONF_ENABLED_HVAC_MODES,
     CONF_IR_PORT,
+    CONF_LIGHT_OFF_BEHAVIOR,
     CONF_ON_DELAY,
     CONF_POWER_BEHAVIOR,
     CONF_POWER_SENSOR,
@@ -55,6 +56,9 @@ from .const import (
     DEFAULT_POWER_THRESHOLD,
     DEVICE_TYPE_CLIMATE,
     DOMAIN,
+    LIGHT_OFF_ALWAYS,
+    LIGHT_OFF_NEVER,
+    LIGHT_OFF_ONCE,
     POWER_EXPLICIT_ON,
     SWING_SEPARATE,
 )
@@ -147,9 +151,18 @@ class SevenPortClimate(ClimateEntity, RestoreEntity):
             CONF_POWER_BEHAVIOR, definition.power_behavior
         )
         self._on_delay: float = float(options.get(CONF_ON_DELAY, DEFAULT_ON_DELAY))
-        self._light_off_enabled: bool = bool(
-            options.get(CONF_ENABLE_LIGHT_OFF, False)
-        ) and definition.has_light_off
+        # Migração: configs antigas usavam CONF_ENABLE_LIGHT_OFF (bool).
+        _raw_behavior = options.get(CONF_LIGHT_OFF_BEHAVIOR)
+        if _raw_behavior is None:
+            _raw_behavior = (
+                LIGHT_OFF_ALWAYS
+                if options.get(CONF_ENABLE_LIGHT_OFF)
+                else LIGHT_OFF_NEVER
+            )
+        self._light_off_behavior: str = (
+            _raw_behavior if definition.has_light_off else LIGHT_OFF_NEVER
+        )
+        self._light_off_sent: bool = False
         self._swing_enabled: bool = bool(
             options.get(CONF_ENABLE_SWING, False)
         ) and definition.has_swing
@@ -398,6 +411,7 @@ class SevenPortClimate(ClimateEntity, RestoreEntity):
         # Apaga a luz do display após desligar, se habilitado.
         if was_on or sent:
             await self._async_send_light_off()
+        self._light_off_sent = False  # reseta o ciclo para o próximo ligar
         self.async_write_ha_state()
 
     async def _async_apply_state(self) -> None:
@@ -431,6 +445,8 @@ class SevenPortClimate(ClimateEntity, RestoreEntity):
                         definition.label,
                     )
 
+        just_turned_on = not self._powered
+
         temp = int(round(self._target_temp))
         code = definition.state_code(mode_key, self._fan_mode, temp)
         if code is None:
@@ -442,15 +458,23 @@ class SevenPortClimate(ClimateEntity, RestoreEntity):
             await self._async_send_command(code)
         self._powered = True
 
-        await self._async_send_light_off()
+        await self._async_send_light_off(just_turned_on=just_turned_on)
         self.async_write_ha_state()
 
-    async def _async_send_light_off(self) -> None:
-        """Envia o comando de apagar a luz do aparelho, se habilitado."""
-        if self._light_off_enabled:
-            await self._async_send_command(
-                self._definition.command(CMD_LIGHT_OFF)
-            )
+    async def _async_send_light_off(self, *, just_turned_on: bool = False) -> None:
+        """Envia o comando de apagar a luz conforme o comportamento configurado.
+
+        - never:  não faz nada.
+        - once:   envia apenas na primeira vez que o aparelho liga no ciclo.
+        - always: envia após cada comando IR.
+        """
+        if self._light_off_behavior == LIGHT_OFF_NEVER:
+            return
+        if self._light_off_behavior == LIGHT_OFF_ONCE:
+            if self._light_off_sent and not just_turned_on:
+                return
+        await self._async_send_command(self._definition.command(CMD_LIGHT_OFF))
+        self._light_off_sent = True
 
     async def _async_send_command(self, code: str | None) -> bool:
         """Envia um código IR pela porta configurada. Retorna sucesso."""
