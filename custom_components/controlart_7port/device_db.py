@@ -33,6 +33,7 @@ from .const import (
     DB_FAN_MODES,
     DB_HVAC_MODES,
     DEVICE_TYPE_CLIMATE,
+    DEVICE_TYPE_TV,
     DOMAIN,
     POWER_BEHAVIORS,
     POWER_STATEFUL,
@@ -66,6 +67,8 @@ class DeviceDefinition:
         self.fan_modes: list[str] = list(data.get("fan_modes", DB_FAN_MODES))
         self.swing_mode: str = data.get("swing_mode", SWING_NONE)
         self.commands: dict[str, Any] = data.get("commands", {})
+        # sources[nome_source] -> código IR (apenas para TVs)
+        self.sources: dict[str, str] = dict(data.get("sources") or {})
         # states[modo][fan][temp] -> código IR
         self.states: dict[str, dict[str, dict[int, str]]] = {}
         for mode, fans in (data.get("states") or {}).items():
@@ -102,6 +105,15 @@ class DeviceDefinition:
     def command(self, key: str) -> str | None:
         """Retorna um código de comando especial (power_off, etc.)."""
         return self.commands.get(key)
+
+    def source_code(self, name: str) -> str | None:
+        """Retorna o código IR de um source de TV pelo nome."""
+        return self.sources.get(name)
+
+    @property
+    def source_list(self) -> list[str]:
+        """Lista de sources de TV disponíveis na definição."""
+        return list(self.sources.keys())
 
 
 class DeviceDatabase:
@@ -227,9 +239,27 @@ async def async_get_database(hass: HomeAssistant) -> DeviceDatabase:
 # ---------------------------------------------------------------------------
 
 _RE_SENDIR_PREFIX = re.compile(r"^sendir,\d+:\d+(.*)$", re.IGNORECASE)
-_RE_TEMP = re.compile(
+
+# Formato legado: Temp-auto22 ou auto22 (sempre cool)
+_RE_TEMP_LEGACY = re.compile(
     r"^(?:temp[-_ ]?)?(auto|low|medium|high)[-_ ]?(\d+)$", re.IGNORECASE
 )
+
+# Formato multi-modo: cool17-auto, heat22-high, dry20-low, fan18-medium
+_RE_STATE_MULTI = re.compile(
+    r"^(cool|heat|dry|fan)(\d+)[_-](\w+)$", re.IGNORECASE
+)
+
+# Mapeamento nome-curto → chave do banco de dados
+_MODE_SHORT_TO_DB = {
+    "cool": "cool",
+    "heat": "heat",
+    "dry": "dry",
+    "fan": "fan_only",
+}
+
+# Mapeamento chave do banco de dados → nome-curto para exibição
+_DB_TO_MODE_SHORT = {v: k for k, v in _MODE_SHORT_TO_DB.items()}
 
 
 def normalize_code(raw: str) -> str | None:
@@ -257,22 +287,32 @@ class CodeParseResult:
     def __init__(self) -> None:
         """Inicializa o resultado vazio."""
         self.commands: dict[str, str] = {}
-        self.states: dict[str, dict[int, str]] = {}  # states[fan][temp]
+        # states[mode][fan][temp] → código IR  (climate)
+        self.states: dict[str, dict[str, dict[int, str]]] = {}
+        # sources[nome] → código IR  (TV)
+        self.sources: dict[str, str] = {}
         self.errors: list[str] = []
         self.unknown: list[str] = []
 
     @property
     def state_count(self) -> int:
-        """Quantidade de códigos de estado reconhecidos."""
-        return sum(len(temps) for temps in self.states.values())
+        """Quantidade de códigos de estado reconhecidos (climate)."""
+        return sum(
+            len(temps)
+            for fans in self.states.values()
+            for temps in fans.values()
+        )
+
+    @property
+    def source_count(self) -> int:
+        """Quantidade de sources reconhecidos (TV)."""
+        return len(self.sources)
 
 
 def parse_code_block(text: str) -> CodeParseResult:
     """Analisa um bloco de texto com linhas `nome: código`.
 
-    Reconhece os nomes usados nas planilhas do integrador:
-    `ligar_ar`, `desligar_ar`, `luz_do_ar`, `swing_on`, `swing_off`,
-    e estados no formato `Temp-<fan><temperatura>` (ex.: `Temp-auto22`).
+    Espera linhas no formato ``nome: código``.
     """
     result = CodeParseResult()
     alias = {
@@ -312,11 +352,21 @@ def parse_code_block(text: str) -> CodeParseResult:
             result.commands[alias[key]] = code
             continue
 
-        match = _RE_TEMP.match(name)
+        # Formato multi-modo: cool17-auto, heat22-high, fan18-medium, dry20-low
+        match = _RE_STATE_MULTI.match(name)
+        if match:
+            mode_db = _MODE_SHORT_TO_DB[match.group(1).lower()]
+            temp = int(match.group(2))
+            fan = match.group(3).lower()
+            result.states.setdefault(mode_db, {}).setdefault(fan, {})[temp] = code
+            continue
+
+        # Formato legado: Temp-auto22 ou auto22 (mapeado para cool)
+        match = _RE_TEMP_LEGACY.match(name)
         if match:
             fan = match.group(1).lower()
             temp = int(match.group(2))
-            result.states.setdefault(fan, {})[temp] = code
+            result.states.setdefault("cool", {}).setdefault(fan, {})[temp] = code
             continue
 
         result.unknown.append(name)
@@ -335,10 +385,13 @@ def build_climate_definition(
     fan_modes: list[str],
     swing_mode: str,
     parsed: CodeParseResult,
+    hvac_modes: list[str] | None = None,
 ) -> dict[str, Any]:
     """Monta o dicionário de definição de um aparelho de climatização."""
     if power_behavior not in POWER_BEHAVIORS:
         power_behavior = POWER_STATEFUL
+
+    requested_modes = hvac_modes or ["cool"]
 
     commands = {
         CMD_POWER_OFF: parsed.commands.get(CMD_POWER_OFF),
@@ -349,14 +402,31 @@ def build_climate_definition(
         commands[CMD_SWING_ON] = parsed.commands.get(CMD_SWING_ON)
         commands[CMD_SWING_OFF] = parsed.commands.get(CMD_SWING_OFF)
 
-    states: dict[str, Any] = {"cool": {}}
-    for fan in fan_modes:
-        temps = parsed.states.get(fan, {})
-        if temps:
-            states["cool"][fan] = {
-                t: c for t, c in sorted(temps.items())
-                if min_temp <= t <= max_temp
-            }
+    states: dict[str, Any] = {}
+    actual_modes: list[str] = []
+
+    for mode in requested_modes:
+        mode_parsed = parsed.states.get(mode, {})
+        mode_states: dict[str, Any] = {}
+        for fan in fan_modes:
+            temps = mode_parsed.get(fan, {})
+            if temps:
+                mode_states[fan] = {
+                    t: c for t, c in sorted(temps.items())
+                    if min_temp <= t <= max_temp
+                }
+        if mode_states:
+            states[mode] = mode_states
+            actual_modes.append(mode)
+
+    # Garante ao menos o modo cool mesmo sem códigos (evita definição vazia).
+    if not actual_modes:
+        actual_modes = ["cool"]
+        states = {"cool": {}}
+
+    # Inclui apenas os fans que têm código em ao menos um modo.
+    used_fans = {fan for mode_s in states.values() for fan in mode_s}
+    output_fan_modes = [f for f in fan_modes if f in used_fans]
 
     return {
         "id": device_id,
@@ -367,11 +437,80 @@ def build_climate_definition(
         "min_temp": int(min_temp),
         "max_temp": int(max_temp),
         "temp_step": 1,
-        "hvac_modes": ["cool"],
-        "fan_modes": [f for f in fan_modes if f in states["cool"]],
+        "hvac_modes": actual_modes,
+        "fan_modes": output_fan_modes,
         "swing_mode": swing_mode,
         "commands": commands,
         "states": states,
+    }
+
+
+def parse_tv_code_block(text: str) -> CodeParseResult:
+    """Analisa um bloco de texto com códigos de TV.
+
+    Formato esperado — uma linha por comando::
+
+        power_on:  sendir,1:8,...
+        power_off: sendir,1:8,...
+        HDMI 1:    sendir,1:8,...
+        Netflix:   sendir,1:8,...
+
+    ``power_on`` e ``power_off`` (e sinônimos em português) são tratados como
+    comandos especiais. Qualquer outra linha vira um *source* da TV.
+    """
+    _ALIASES: dict[str, str] = {
+        "power_on": CMD_POWER_ON,
+        "ligar": CMD_POWER_ON,
+        "on": CMD_POWER_ON,
+        "power_off": CMD_POWER_OFF,
+        "desligar": CMD_POWER_OFF,
+        "off": CMD_POWER_OFF,
+    }
+
+    result = CodeParseResult()
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            result.errors.append(f"Linha {lineno}: faltou ':' — '{line[:40]}'")
+            continue
+        name, _, value = line.partition(":")
+        name = name.strip()
+        code = normalize_code(value)
+        if not code:
+            result.errors.append(f"Linha {lineno}: código vazio para '{name}'")
+            continue
+
+        cmd = _ALIASES.get(name.lower())
+        if cmd is not None:
+            result.commands[cmd] = code
+        else:
+            # Qualquer outra linha é um source; preserva o nome original.
+            result.sources[name] = code
+
+    return result
+
+
+def build_tv_definition(
+    *,
+    device_id: str,
+    brand: str,
+    model: str,
+    parsed: CodeParseResult,
+) -> dict[str, Any]:
+    """Monta o dicionário de definição de uma TV."""
+    commands = {
+        CMD_POWER_OFF: parsed.commands.get(CMD_POWER_OFF),
+        CMD_POWER_ON: parsed.commands.get(CMD_POWER_ON),
+    }
+    return {
+        "id": device_id,
+        "brand": brand,
+        "model": model,
+        "device_type": DEVICE_TYPE_TV,
+        "commands": commands,
+        "sources": dict(parsed.sources),
     }
 
 
@@ -395,12 +534,33 @@ def definition_to_yaml(definition: dict[str, Any]) -> str:
     )
 
 
-def expected_state_keys(fan_modes: list[str], min_temp: int, max_temp: int) -> list[str]:
-    """Lista os nomes de comando esperados para uma matriz fan × temperatura."""
+def expected_state_keys(
+    fan_modes: list[str],
+    min_temp: int,
+    max_temp: int,
+    hvac_modes: list[str] | None = None,
+) -> list[str]:
+    """Lista os nomes de comando esperados para a matriz modo × temperatura × fan.
+
+    Formato de saída:
+    - Um único modo cool → legado ``Temp-{fan}{temp}`` (compatibilidade).
+    - Múltiplos modos → novo formato ``{modo_curto}{temp}-{fan}``.
+    """
+    modes = hvac_modes or ["cool"]
     keys: list[str] = []
-    for fan in fan_modes:
+
+    if modes == ["cool"]:
+        # Mantém o formato legado para definições só-cool.
+        for fan in fan_modes:
+            for temp in range(min_temp, max_temp + 1):
+                keys.append(f"Temp-{fan}{temp}")
+        return keys
+
+    for mode in modes:
+        prefix = _DB_TO_MODE_SHORT.get(mode, mode)
         for temp in range(min_temp, max_temp + 1):
-            keys.append(f"Temp-{fan}{temp}")
+            for fan in fan_modes:
+                keys.append(f"{prefix}{temp}-{fan}")
     return keys
 
 
@@ -412,8 +572,10 @@ __all__ = [
     "DeviceDefinition",
     "async_get_database",
     "build_climate_definition",
+    "build_tv_definition",
     "definition_to_yaml",
     "expected_state_keys",
     "normalize_code",
     "parse_code_block",
+    "parse_tv_code_block",
 ]

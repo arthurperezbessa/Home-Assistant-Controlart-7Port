@@ -58,14 +58,15 @@
             "min_temp": "Minimum temperature (°C)",
             "max_temp": "Maximum temperature (°C)",
             "fan_modes": "Fan speeds",
+            "extra_hvac_modes": "Additional modes (beyond Cool)",
             "swing_mode": "Swing"
           }
         },
         "new_codes": {
           "title": "Paste the captured codes",
-          "description": "Paste one code per line in the format `name: code`, exactly like the 7Config command list.\n\nExpected {count} commands: {expected}\n\nExample:\n{example}",
+          "description": "Paste one code per line as `name: sendir,1:8,...`. The integration strips the `sendir,1:X,` prefix automatically.\n\nExpected {count} commands: {expected}\n\nExample:\n{example}",
           "data": {
-            "codes": "Codes"
+            "codes": "Codes (one per line)"
           }
         },
         "configure": {
@@ -77,7 +78,7 @@
             "power_behavior": "Power behavior",
             "on_delay": "Delay after the 'power on' code",
             "enabled_hvac_modes": "Enabled HVAC modes",
-            "enable_light_off": "Turn off the appliance display light after commands",
+            "light_off_behavior": "Display light control",
             "enable_swing": "Enable swing control",
             "power_sensor": "Power feedback sensor (optional)",
             "power_threshold": "Sensor 'on' threshold (for numeric sensors)"
@@ -92,10 +93,43 @@
             "power_behavior": "Power behavior",
             "on_delay": "Delay after the 'power on' code",
             "enabled_hvac_modes": "Enabled HVAC modes",
-            "enable_light_off": "Turn off the appliance display light after commands",
+            "light_off_behavior": "Display light control",
             "enable_swing": "Enable swing control",
             "power_sensor": "Power feedback sensor (optional)",
             "power_threshold": "Sensor 'on' threshold (for numeric sensors)"
+          }
+        },
+        "new_meta_tv": {
+          "title": "New TV definition",
+          "description": "Enter the brand and model of the TV.",
+          "data": {
+            "brand": "Brand",
+            "model": "Model"
+          }
+        },
+        "new_codes_tv": {
+          "title": "Paste the IR codes",
+          "description": "Paste one code per line. Use `power_on` and `power_off` for power commands. Any other name becomes a source.\n\nExample:\n{example}",
+          "data": {
+            "codes": "Codes (one per line)"
+          }
+        },
+        "configure_tv": {
+          "title": "Configure TV",
+          "description": "Set up {device}.",
+          "data": {
+            "name": "Name",
+            "ir_port": "7Port output (1-7, or 8 = internal Blaster)",
+            "backing_entity": "Reference entity (already integrated TV)"
+          }
+        },
+        "reconfigure_tv": {
+          "title": "Edit TV",
+          "description": "Edit {device}.",
+          "data": {
+            "name": "Name",
+            "ir_port": "7Port output (1-7, or 8 = internal Blaster)",
+            "backing_entity": "Reference entity (already integrated TV)"
           }
         }
       },
@@ -110,10 +144,18 @@
       }
     }
   },
+  "entity": {
+    "binary_sensor": {
+      "connectivity": {
+        "name": "Connectivity"
+      }
+    }
+  },
   "selector": {
     "device_type": {
       "options": {
-        "climate": "Air conditioner"
+        "climate": "Air conditioner",
+        "tv": "Smart TV"
       }
     },
     "power_behavior": {
@@ -142,6 +184,13 @@
         "heat": "Heat",
         "dry": "Dry",
         "fan_only": "Fan only"
+      }
+    },
+    "light_off_behavior": {
+      "options": {
+        "never": "Do not control the display light",
+        "once": "Turn off once when powering on (unit remembers the state)",
+        "always": "Turn off after every command (unit resets light on each command)"
       }
     }
   }
