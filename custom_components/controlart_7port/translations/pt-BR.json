@@ -98,6 +98,39 @@
             "power_sensor": "Sensor de feedback de energia (opcional)",
             "power_threshold": "Limiar de 'ligado' do sensor (para sensores numéricos)"
           }
+        },
+        "new_meta_tv": {
+          "title": "Nova definição de TV",
+          "description": "Informe a marca e o modelo da TV.",
+          "data": {
+            "brand": "Marca",
+            "model": "Modelo"
+          }
+        },
+        "new_codes_tv": {
+          "title": "Cole os códigos IR",
+          "description": "Cole um código por linha. Use `power_on` e `power_off` para ligar/desligar. Qualquer outro nome vira um source.\n\nExemplo:\n{example}",
+          "data": {
+            "codes": "Códigos (um por linha)"
+          }
+        },
+        "configure_tv": {
+          "title": "Configurar TV",
+          "description": "Configuração de {device}.",
+          "data": {
+            "name": "Nome",
+            "ir_port": "Saída da 7Port (1-7, ou 8 = Blaster interno)",
+            "backing_entity": "Entidade de referência (TV já integrada ao HA)"
+          }
+        },
+        "reconfigure_tv": {
+          "title": "Editar TV",
+          "description": "Edição de {device}.",
+          "data": {
+            "name": "Nome",
+            "ir_port": "Saída da 7Port (1-7, ou 8 = Blaster interno)",
+            "backing_entity": "Entidade de referência (TV já integrada ao HA)"
+          }
         }
       },
       "error": {
@@ -121,7 +154,8 @@
   "selector": {
     "device_type": {
       "options": {
-        "climate": "Ar-condicionado"
+        "climate": "Ar-condicionado",
+        "tv": "Smart TV"
       }
     },
     "power_behavior": {

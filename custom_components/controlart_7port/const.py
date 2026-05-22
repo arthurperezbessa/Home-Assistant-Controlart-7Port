@@ -42,7 +42,11 @@ DEFAULT_POWER_THRESHOLD = 0.1
 
 # Tipos de dispositivo suportados.
 DEVICE_TYPE_CLIMATE = "climate"
-SUPPORTED_DEVICE_TYPES = [DEVICE_TYPE_CLIMATE]
+DEVICE_TYPE_TV = "tv"
+SUPPORTED_DEVICE_TYPES = [DEVICE_TYPE_CLIMATE, DEVICE_TYPE_TV]
+
+# Configuração de TV.
+CONF_BACKING_ENTITY = "backing_entity"
 
 # Comportamentos de ligar.
 POWER_STATEFUL = "stateful"      # o código de estado já liga o aparelho

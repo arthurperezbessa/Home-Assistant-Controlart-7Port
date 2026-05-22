@@ -24,6 +24,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_BACKING_ENTITY,
     CONF_BRAND,
     CONF_DEVICE_ID,
     CONF_DEVICE_TYPE,
@@ -44,6 +45,7 @@ from .const import (
     DEFAULT_PORT,
     DEFAULT_POWER_THRESHOLD,
     DEVICE_TYPE_CLIMATE,
+    DEVICE_TYPE_TV,
     DOMAIN,
     LIGHT_OFF_BEHAVIORS,
     LIGHT_OFF_NEVER,
@@ -62,9 +64,11 @@ from .device_db import (
     DB_FAN_MODES,
     async_get_database,
     build_climate_definition,
+    build_tv_definition,
     definition_to_yaml,
     expected_state_keys,
     parse_code_block,
+    parse_tv_code_block,
 )
 from .tcp import SevenPortClient
 
@@ -140,14 +144,13 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             self._device_type = user_input[CONF_DEVICE_TYPE]
             return await self.async_step_brand()
 
-        # Apenas climate está disponível nesta versão.
         schema = vol.Schema(
             {
                 vol.Required(
                     CONF_DEVICE_TYPE, default=DEVICE_TYPE_CLIMATE
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=[DEVICE_TYPE_CLIMATE],
+                        options=[DEVICE_TYPE_CLIMATE, DEVICE_TYPE_TV],
                         translation_key="device_type",
                     )
                 )
@@ -165,7 +168,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
         if user_input is not None:
             choice = user_input[CONF_BRAND]
             if choice == NEW_DEFINITION:
-                return await self.async_step_new_meta()
+                return await self._async_step_new_meta_dispatch()
             self._brand = choice
             return await self.async_step_model()
 
@@ -196,9 +199,9 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
         if user_input is not None:
             choice = user_input[CONF_MODEL]
             if choice == NEW_DEFINITION:
-                return await self.async_step_new_meta()
+                return await self._async_step_new_meta_dispatch()
             self._device_id = choice
-            return await self.async_step_configure()
+            return await self._async_step_configure_dispatch()
 
         options = [
             selector.SelectOptionDict(value=m.id, label=m.model)
@@ -222,7 +225,19 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             description_placeholders={"brand": self._brand or ""},
         )
 
-    # -- Assistente: criar definição de dispositivo ------------------------
+    # -- Despachantes (roteiam para o wizard correto por device_type) ---------
+
+    async def _async_step_new_meta_dispatch(self) -> SubentryFlowResult:
+        if self._device_type == DEVICE_TYPE_TV:
+            return await self.async_step_new_meta_tv()
+        return await self.async_step_new_meta()
+
+    async def _async_step_configure_dispatch(self) -> SubentryFlowResult:
+        if self._device_type == DEVICE_TYPE_TV:
+            return await self.async_step_configure_tv()
+        return await self.async_step_configure()
+
+    # -- Assistente: criar definição de dispositivo (climate) ----------------
 
     async def async_step_new_meta(
         self, user_input: dict[str, Any] | None = None
@@ -441,7 +456,147 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             },
         )
 
-    # -- Reconfiguração de um aparelho existente ---------------------------
+    # -- Wizard TV: nova definição -----------------------------------------
+
+    async def async_step_new_meta_tv(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Coleta marca e modelo da nova definição de TV."""
+        if user_input is not None:
+            self._new_meta = {
+                CONF_BRAND: user_input[CONF_BRAND].strip(),
+                CONF_MODEL: user_input[CONF_MODEL].strip(),
+            }
+            return await self.async_step_new_codes_tv()
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_BRAND, default=self._brand or ""): str,
+                vol.Required(CONF_MODEL, default="Genérico"): str,
+            }
+        )
+        return self.async_show_form(step_id="new_meta_tv", data_schema=schema)
+
+    async def async_step_new_codes_tv(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Recebe os códigos IR da TV (power + sources)."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            parsed = parse_tv_code_block(user_input["codes"])
+            if parsed.errors and parsed.source_count == 0 and not parsed.commands:
+                errors["base"] = "parse_errors"
+            else:
+                meta = self._new_meta
+                database = await async_get_database(self.hass)
+                device_id = database.unique_id(
+                    f"{meta[CONF_BRAND]}_{meta[CONF_MODEL]}"
+                )
+                definition = build_tv_definition(
+                    device_id=device_id,
+                    brand=meta[CONF_BRAND],
+                    model=meta[CONF_MODEL],
+                    parsed=parsed,
+                )
+                await database.async_add_custom(definition)
+                self._brand = definition[CONF_BRAND]
+                self._device_id = device_id
+                _LOGGER.info(
+                    "Definição de TV criada (%s). YAML:\n%s",
+                    device_id,
+                    definition_to_yaml(definition),
+                )
+                return await self.async_step_configure_tv()
+
+        example = (
+            "power_on: sendir,1:8,1,38000,...\n"
+            "power_off: sendir,1:8,1,38000,...\n"
+            "HDMI 1: sendir,1:8,1,38000,...\n"
+            "Netflix: sendir,1:8,1,38000,...\n"
+            "YouTube: sendir,1:8,1,38000,..."
+        )
+        schema = vol.Schema(
+            {
+                vol.Required("codes"): selector.TextSelector(
+                    selector.TextSelectorConfig(multiline=True)
+                )
+            }
+        )
+        return self.async_show_form(
+            step_id="new_codes_tv",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"example": example},
+        )
+
+    # -- Configuração / reconfiguração de TV ----------------------------------
+
+    async def async_step_configure_tv(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Configura porta IR e entidade de referência da TV."""
+        database = await async_get_database(self.hass)
+        definition = database.get(self._device_id or "")
+        if definition is None:
+            return self.async_abort(reason="unknown_device")
+
+        if user_input is not None:
+            data: dict[str, Any] = {
+                CONF_DEVICE_TYPE: DEVICE_TYPE_TV,
+                CONF_DEVICE_ID: definition.id,
+                CONF_BRAND: definition.brand,
+                CONF_MODEL: definition.model,
+                CONF_IR_PORT: user_input[CONF_IR_PORT],
+                CONF_BACKING_ENTITY: user_input[CONF_BACKING_ENTITY],
+            }
+            return self.async_create_entry(
+                title=user_input[CONF_NAME].strip(), data=data
+            )
+
+        schema = _build_configure_schema_tv(definition, defaults=None)
+        return self.async_show_form(
+            step_id="configure_tv",
+            data_schema=schema,
+            description_placeholders={"device": definition.label},
+        )
+
+    async def async_step_reconfigure_tv(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edita uma TV já cadastrada."""
+        subentry = self._get_reconfigure_subentry()
+        database = await async_get_database(self.hass)
+        definition = database.get(subentry.data.get(CONF_DEVICE_ID, ""))
+        if definition is None:
+            return self.async_abort(reason="unknown_device")
+
+        if user_input is not None:
+            data = dict(subentry.data)
+            data.update(
+                {
+                    CONF_IR_PORT: user_input[CONF_IR_PORT],
+                    CONF_BACKING_ENTITY: user_input[CONF_BACKING_ENTITY],
+                }
+            )
+            return self.async_update_and_abort(
+                self._get_entry(),
+                subentry,
+                title=user_input[CONF_NAME].strip(),
+                data=data,
+            )
+
+        schema = _build_configure_schema_tv(
+            definition,
+            defaults={CONF_NAME: subentry.title, **subentry.data},
+        )
+        return self.async_show_form(
+            step_id="reconfigure_tv",
+            data_schema=schema,
+            description_placeholders={"device": definition.label},
+        )
+
+    # -- Reconfiguração de um aparelho existente (climate) -----------------
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
@@ -612,3 +767,31 @@ def _build_configure_schema(
     )
 
     return vol.Schema(fields)
+
+
+def _build_configure_schema_tv(
+    definition: Any,
+    defaults: dict[str, Any] | None,
+) -> vol.Schema:
+    """Schema do passo de configuração de TV."""
+    defaults = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_NAME,
+                default=defaults.get(CONF_NAME, definition.label),
+            ): str,
+            vol.Required(
+                CONF_IR_PORT,
+                default=defaults.get(CONF_IR_PORT, MIN_IR_PORT),
+            ): vol.All(int, vol.Range(min=MIN_IR_PORT, max=MAX_IR_PORT)),
+            vol.Required(
+                CONF_BACKING_ENTITY,
+                description={
+                    "suggested_value": defaults.get(CONF_BACKING_ENTITY)
+                },
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="media_player")
+            ),
+        }
+    )

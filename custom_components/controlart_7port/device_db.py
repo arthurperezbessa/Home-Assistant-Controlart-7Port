@@ -33,6 +33,7 @@ from .const import (
     DB_FAN_MODES,
     DB_HVAC_MODES,
     DEVICE_TYPE_CLIMATE,
+    DEVICE_TYPE_TV,
     DOMAIN,
     POWER_BEHAVIORS,
     POWER_STATEFUL,
@@ -66,6 +67,8 @@ class DeviceDefinition:
         self.fan_modes: list[str] = list(data.get("fan_modes", DB_FAN_MODES))
         self.swing_mode: str = data.get("swing_mode", SWING_NONE)
         self.commands: dict[str, Any] = data.get("commands", {})
+        # sources[nome_source] -> código IR (apenas para TVs)
+        self.sources: dict[str, str] = dict(data.get("sources") or {})
         # states[modo][fan][temp] -> código IR
         self.states: dict[str, dict[str, dict[int, str]]] = {}
         for mode, fans in (data.get("states") or {}).items():
@@ -102,6 +105,15 @@ class DeviceDefinition:
     def command(self, key: str) -> str | None:
         """Retorna um código de comando especial (power_off, etc.)."""
         return self.commands.get(key)
+
+    def source_code(self, name: str) -> str | None:
+        """Retorna o código IR de um source de TV pelo nome."""
+        return self.sources.get(name)
+
+    @property
+    def source_list(self) -> list[str]:
+        """Lista de sources de TV disponíveis na definição."""
+        return list(self.sources.keys())
 
 
 class DeviceDatabase:
@@ -275,19 +287,26 @@ class CodeParseResult:
     def __init__(self) -> None:
         """Inicializa o resultado vazio."""
         self.commands: dict[str, str] = {}
-        # states[mode][fan][temp] → código IR
+        # states[mode][fan][temp] → código IR  (climate)
         self.states: dict[str, dict[str, dict[int, str]]] = {}
+        # sources[nome] → código IR  (TV)
+        self.sources: dict[str, str] = {}
         self.errors: list[str] = []
         self.unknown: list[str] = []
 
     @property
     def state_count(self) -> int:
-        """Quantidade de códigos de estado reconhecidos."""
+        """Quantidade de códigos de estado reconhecidos (climate)."""
         return sum(
             len(temps)
             for fans in self.states.values()
             for temps in fans.values()
         )
+
+    @property
+    def source_count(self) -> int:
+        """Quantidade de sources reconhecidos (TV)."""
+        return len(self.sources)
 
 
 def parse_code_block(text: str) -> CodeParseResult:
@@ -426,6 +445,75 @@ def build_climate_definition(
     }
 
 
+def parse_tv_code_block(text: str) -> CodeParseResult:
+    """Analisa um bloco de texto com códigos de TV.
+
+    Formato esperado — uma linha por comando::
+
+        power_on:  sendir,1:8,...
+        power_off: sendir,1:8,...
+        HDMI 1:    sendir,1:8,...
+        Netflix:   sendir,1:8,...
+
+    ``power_on`` e ``power_off`` (e sinônimos em português) são tratados como
+    comandos especiais. Qualquer outra linha vira um *source* da TV.
+    """
+    _ALIASES: dict[str, str] = {
+        "power_on": CMD_POWER_ON,
+        "ligar": CMD_POWER_ON,
+        "on": CMD_POWER_ON,
+        "power_off": CMD_POWER_OFF,
+        "desligar": CMD_POWER_OFF,
+        "off": CMD_POWER_OFF,
+    }
+
+    result = CodeParseResult()
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            result.errors.append(f"Linha {lineno}: faltou ':' — '{line[:40]}'")
+            continue
+        name, _, value = line.partition(":")
+        name = name.strip()
+        code = normalize_code(value)
+        if not code:
+            result.errors.append(f"Linha {lineno}: código vazio para '{name}'")
+            continue
+
+        cmd = _ALIASES.get(name.lower())
+        if cmd is not None:
+            result.commands[cmd] = code
+        else:
+            # Qualquer outra linha é um source; preserva o nome original.
+            result.sources[name] = code
+
+    return result
+
+
+def build_tv_definition(
+    *,
+    device_id: str,
+    brand: str,
+    model: str,
+    parsed: CodeParseResult,
+) -> dict[str, Any]:
+    """Monta o dicionário de definição de uma TV."""
+    commands = {
+        CMD_POWER_OFF: parsed.commands.get(CMD_POWER_OFF),
+        CMD_POWER_ON: parsed.commands.get(CMD_POWER_ON),
+    }
+    return {
+        "id": device_id,
+        "brand": brand,
+        "model": model,
+        "device_type": DEVICE_TYPE_TV,
+        "commands": commands,
+        "sources": dict(parsed.sources),
+    }
+
+
 def definition_to_yaml(definition: dict[str, Any]) -> str:
     """Serializa uma definição em YAML (para o usuário contribuir no repo)."""
 
@@ -484,8 +572,10 @@ __all__ = [
     "DeviceDefinition",
     "async_get_database",
     "build_climate_definition",
+    "build_tv_definition",
     "definition_to_yaml",
     "expected_state_keys",
     "normalize_code",
     "parse_code_block",
+    "parse_tv_code_block",
 ]

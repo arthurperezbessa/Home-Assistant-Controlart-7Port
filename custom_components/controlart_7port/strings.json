@@ -98,6 +98,39 @@
             "power_sensor": "Power feedback sensor (optional)",
             "power_threshold": "Sensor 'on' threshold (for numeric sensors)"
           }
+        },
+        "new_meta_tv": {
+          "title": "New TV definition",
+          "description": "Enter the brand and model of the TV.",
+          "data": {
+            "brand": "Brand",
+            "model": "Model"
+          }
+        },
+        "new_codes_tv": {
+          "title": "Paste the IR codes",
+          "description": "Paste one code per line. Use `power_on` and `power_off` for power commands. Any other name becomes a source.\n\nExample:\n{example}",
+          "data": {
+            "codes": "Codes (one per line)"
+          }
+        },
+        "configure_tv": {
+          "title": "Configure TV",
+          "description": "Set up {device}.",
+          "data": {
+            "name": "Name",
+            "ir_port": "7Port output (1-7, or 8 = internal Blaster)",
+            "backing_entity": "Reference entity (already integrated TV)"
+          }
+        },
+        "reconfigure_tv": {
+          "title": "Edit TV",
+          "description": "Edit {device}.",
+          "data": {
+            "name": "Name",
+            "ir_port": "7Port output (1-7, or 8 = internal Blaster)",
+            "backing_entity": "Reference entity (already integrated TV)"
+          }
         }
       },
       "error": {
@@ -121,7 +154,8 @@
   "selector": {
     "device_type": {
       "options": {
-        "climate": "Air conditioner"
+        "climate": "Air conditioner",
+        "tv": "Smart TV"
       }
     },
     "power_behavior": {
