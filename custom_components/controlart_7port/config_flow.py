@@ -24,6 +24,8 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CMD_CLOSE,
+    CMD_OPEN,
     CONF_BACKING_ENTITY,
     CONF_BRAND,
     CONF_DEVICE_ID,
@@ -41,10 +43,12 @@ from .const import (
     CONF_POWER_BEHAVIOR,
     CONF_POWER_SENSOR,
     CONF_POWER_THRESHOLD,
+    CONF_WINDOW_SENSOR,
     DEFAULT_ON_DELAY,
     DEFAULT_PORT,
     DEFAULT_POWER_THRESHOLD,
     DEVICE_TYPE_CLIMATE,
+    DEVICE_TYPE_COVER,
     DEVICE_TYPE_TV,
     DOMAIN,
     LIGHT_OFF_BEHAVIORS,
@@ -64,10 +68,12 @@ from .device_db import (
     DB_FAN_MODES,
     async_get_database,
     build_climate_definition,
+    build_cover_definition,
     build_tv_definition,
     definition_to_yaml,
     expected_state_keys,
     parse_code_block,
+    parse_cover_code_block,
     parse_tv_code_block,
 )
 from .tcp import SevenPortClient
@@ -150,7 +156,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
                     CONF_DEVICE_TYPE, default=DEVICE_TYPE_CLIMATE
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=[DEVICE_TYPE_CLIMATE, DEVICE_TYPE_TV],
+                        options=[DEVICE_TYPE_CLIMATE, DEVICE_TYPE_TV, DEVICE_TYPE_COVER],
                         translation_key="device_type",
                     )
                 )
@@ -230,11 +236,15 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
     async def _async_step_new_meta_dispatch(self) -> SubentryFlowResult:
         if self._device_type == DEVICE_TYPE_TV:
             return await self.async_step_new_meta_tv()
+        if self._device_type == DEVICE_TYPE_COVER:
+            return await self.async_step_new_meta_cover()
         return await self.async_step_new_meta()
 
     async def _async_step_configure_dispatch(self) -> SubentryFlowResult:
         if self._device_type == DEVICE_TYPE_TV:
             return await self.async_step_configure_tv()
+        if self._device_type == DEVICE_TYPE_COVER:
+            return await self.async_step_configure_cover()
         return await self.async_step_configure()
 
     # -- Assistente: criar definição de dispositivo (climate) ----------------
@@ -596,13 +606,161 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             description_placeholders={"device": definition.label},
         )
 
+    # -- Wizard cover: nova definição ----------------------------------------
+
+    async def async_step_new_meta_cover(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Coleta marca e modelo da nova definição de cortina/persiana."""
+        if user_input is not None:
+            self._new_meta = {
+                CONF_BRAND: user_input[CONF_BRAND].strip(),
+                CONF_MODEL: user_input[CONF_MODEL].strip(),
+            }
+            return await self.async_step_new_codes_cover()
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_BRAND, default=self._brand or ""): str,
+                vol.Required(CONF_MODEL, default="Genérico"): str,
+            }
+        )
+        return self.async_show_form(step_id="new_meta_cover", data_schema=schema)
+
+    async def async_step_new_codes_cover(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Recebe os códigos IR da cortina (abrir, fechar e opcionalmente parar)."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            parsed = parse_cover_code_block(user_input["codes"])
+            has_open = CMD_OPEN in parsed.commands
+            has_close = CMD_CLOSE in parsed.commands
+            if parsed.errors and not (has_open and has_close):
+                errors["base"] = "parse_errors"
+            elif not (has_open and has_close):
+                errors["base"] = "cover_missing_codes"
+            else:
+                meta = self._new_meta
+                database = await async_get_database(self.hass)
+                device_id = database.unique_id(
+                    f"{meta[CONF_BRAND]}_{meta[CONF_MODEL]}"
+                )
+                definition = build_cover_definition(
+                    device_id=device_id,
+                    brand=meta[CONF_BRAND],
+                    model=meta[CONF_MODEL],
+                    parsed=parsed,
+                )
+                await database.async_add_custom(definition)
+                self._brand = definition[CONF_BRAND]
+                self._device_id = device_id
+                _LOGGER.info(
+                    "Definição de cortina criada (%s). YAML:\n%s",
+                    device_id,
+                    definition_to_yaml(definition),
+                )
+                return await self.async_step_configure_cover()
+
+        example = (
+            "open: sendir,1:8,1,38000,...\n"
+            "close: sendir,1:8,1,38000,...\n"
+            "stop: sendir,1:8,1,38000,...  # opcional"
+        )
+        schema = vol.Schema(
+            {
+                vol.Required("codes"): selector.TextSelector(
+                    selector.TextSelectorConfig(multiline=True)
+                )
+            }
+        )
+        return self.async_show_form(
+            step_id="new_codes_cover",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"example": example},
+        )
+
+    # -- Configuração / reconfiguração de cortina -----------------------------
+
+    async def async_step_configure_cover(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Configura porta IR e sensor de janela opcional da cortina."""
+        database = await async_get_database(self.hass)
+        definition = database.get(self._device_id or "")
+        if definition is None:
+            return self.async_abort(reason="unknown_device")
+
+        if user_input is not None:
+            data: dict[str, Any] = {
+                CONF_DEVICE_TYPE: DEVICE_TYPE_COVER,
+                CONF_DEVICE_ID: definition.id,
+                CONF_BRAND: definition.brand,
+                CONF_MODEL: definition.model,
+                CONF_IR_PORT: user_input[CONF_IR_PORT],
+                CONF_WINDOW_SENSOR: user_input.get(CONF_WINDOW_SENSOR) or None,
+            }
+            return self.async_create_entry(
+                title=user_input[CONF_NAME].strip(), data=data
+            )
+
+        schema = _build_configure_schema_cover(definition, defaults=None)
+        return self.async_show_form(
+            step_id="configure_cover",
+            data_schema=schema,
+            description_placeholders={"device": definition.label},
+        )
+
+    async def async_step_reconfigure_cover(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edita uma cortina já cadastrada."""
+        subentry = self._get_reconfigure_subentry()
+        database = await async_get_database(self.hass)
+        definition = database.get(subentry.data.get(CONF_DEVICE_ID, ""))
+        if definition is None:
+            return self.async_abort(reason="unknown_device")
+
+        if user_input is not None:
+            data = dict(subentry.data)
+            data.update(
+                {
+                    CONF_IR_PORT: user_input[CONF_IR_PORT],
+                    CONF_WINDOW_SENSOR: user_input.get(CONF_WINDOW_SENSOR) or None,
+                }
+            )
+            return self.async_update_and_abort(
+                self._get_entry(),
+                subentry,
+                title=user_input[CONF_NAME].strip(),
+                data=data,
+            )
+
+        schema = _build_configure_schema_cover(
+            definition,
+            defaults={CONF_NAME: subentry.title, **subentry.data},
+        )
+        return self.async_show_form(
+            step_id="reconfigure_cover",
+            data_schema=schema,
+            description_placeholders={"device": definition.label},
+        )
+
     # -- Reconfiguração de um aparelho existente (climate) -----------------
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Edita um aparelho já cadastrado."""
+        """Edita um aparelho já cadastrado (despacha para o wizard correto)."""
         subentry = self._get_reconfigure_subentry()
+        device_type = subentry.data.get(CONF_DEVICE_TYPE, DEVICE_TYPE_CLIMATE)
+        if device_type == DEVICE_TYPE_TV:
+            return await self.async_step_reconfigure_tv(user_input)
+        if device_type == DEVICE_TYPE_COVER:
+            return await self.async_step_reconfigure_cover(user_input)
+
         database = await async_get_database(self.hass)
         definition = database.get(subentry.data.get(CONF_DEVICE_ID, ""))
         if definition is None:
@@ -767,6 +925,34 @@ def _build_configure_schema(
     )
 
     return vol.Schema(fields)
+
+
+def _build_configure_schema_cover(
+    definition: Any,
+    defaults: dict[str, Any] | None,
+) -> vol.Schema:
+    """Schema do passo de configuração de cortina/persiana."""
+    defaults = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_NAME,
+                default=defaults.get(CONF_NAME, definition.label),
+            ): str,
+            vol.Required(
+                CONF_IR_PORT,
+                default=defaults.get(CONF_IR_PORT, MIN_IR_PORT),
+            ): vol.All(int, vol.Range(min=MIN_IR_PORT, max=MAX_IR_PORT)),
+            vol.Optional(
+                CONF_WINDOW_SENSOR,
+                description={
+                    "suggested_value": defaults.get(CONF_WINDOW_SENSOR)
+                },
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
+        }
+    )
 
 
 def _build_configure_schema_tv(

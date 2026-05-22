@@ -131,13 +131,47 @@
             "ir_port": "7Port output (1-7, or 8 = internal Blaster)",
             "backing_entity": "Reference entity (already integrated TV)"
           }
+        },
+        "new_meta_cover": {
+          "title": "New cover definition",
+          "description": "Enter the brand and model of the curtain/blind.",
+          "data": {
+            "brand": "Brand",
+            "model": "Model"
+          }
+        },
+        "new_codes_cover": {
+          "title": "Paste the IR codes",
+          "description": "Paste one code per line. `open` and `close` are required; `stop` is optional.\n\nExample:\n{example}",
+          "data": {
+            "codes": "Codes (one per line)"
+          }
+        },
+        "configure_cover": {
+          "title": "Configure cover",
+          "description": "Set up {device}.",
+          "data": {
+            "name": "Name",
+            "ir_port": "7Port output (1-7, or 8 = internal Blaster)",
+            "window_sensor": "Window sensor (blocks closing when window is open)"
+          }
+        },
+        "reconfigure_cover": {
+          "title": "Edit cover",
+          "description": "Edit {device}.",
+          "data": {
+            "name": "Name",
+            "ir_port": "7Port output (1-7, or 8 = internal Blaster)",
+            "window_sensor": "Window sensor (blocks closing when window is open)"
+          }
         }
       },
       "error": {
         "temp_range": "Minimum temperature cannot be greater than the maximum.",
         "no_fan_modes": "Select at least one fan speed.",
         "parse_errors": "Some lines could not be read. Check the format `name: code`.",
-        "no_states": "No state codes were recognized. Use names like `Temp-auto22`."
+        "no_states": "No state codes were recognized. Use names like `Temp-auto22`.",
+        "cover_missing_codes": "The `open` and `close` codes are required."
       },
       "abort": {
         "unknown_device": "The device definition could not be found."
@@ -155,7 +189,8 @@
     "device_type": {
       "options": {
         "climate": "Air conditioner",
-        "tv": "Smart TV"
+        "tv": "Smart TV",
+        "cover": "Cover / Blind"
       }
     },
     "power_behavior": {

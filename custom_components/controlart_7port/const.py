@@ -43,10 +43,14 @@ DEFAULT_POWER_THRESHOLD = 0.1
 # Tipos de dispositivo suportados.
 DEVICE_TYPE_CLIMATE = "climate"
 DEVICE_TYPE_TV = "tv"
-SUPPORTED_DEVICE_TYPES = [DEVICE_TYPE_CLIMATE, DEVICE_TYPE_TV]
+DEVICE_TYPE_COVER = "cover"
+SUPPORTED_DEVICE_TYPES = [DEVICE_TYPE_CLIMATE, DEVICE_TYPE_TV, DEVICE_TYPE_COVER]
 
 # Configuração de TV.
 CONF_BACKING_ENTITY = "backing_entity"
+
+# Configuração de cortina/persiana.
+CONF_WINDOW_SENSOR = "window_sensor"
 
 # Comportamentos de ligar.
 POWER_STATEFUL = "stateful"      # o código de estado já liga o aparelho
@@ -70,6 +74,9 @@ CMD_POWER_ON = "power_on"
 CMD_LIGHT_OFF = "light_off"
 CMD_SWING_ON = "swing_on"
 CMD_SWING_OFF = "swing_off"
+CMD_OPEN = "open"
+CMD_CLOSE = "close"
+CMD_STOP = "stop"
 
 # Modos HVAC reconhecidos no banco de dados.
 DB_HVAC_MODES = ["cool", "heat", "dry", "fan_only"]
