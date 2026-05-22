@@ -58,14 +58,15 @@
             "min_temp": "Temperatura mínima (°C)",
             "max_temp": "Temperatura máxima (°C)",
             "fan_modes": "Velocidades de ventilação",
+            "extra_hvac_modes": "Modos adicionais (além de Resfriar)",
             "swing_mode": "Swing (oscilação)"
           }
         },
         "new_codes": {
           "title": "Cole os códigos capturados",
-          "description": "Cole um código por linha no formato `nome: código`, igual à lista de comandos do 7Config.\n\nComandos esperados ({count}): {expected}\n\nExemplo:\n{example}",
+          "description": "Cole um código por linha no formato `nome: sendir,1:8,...`. A integração extrai o prefixo `sendir,1:X,` automaticamente.\n\nComandos esperados ({count}): {expected}\n\nExemplo:\n{example}",
           "data": {
-            "codes": "Códigos"
+            "codes": "Códigos (um por linha)"
           }
         },
         "configure": {
@@ -77,7 +78,7 @@
             "power_behavior": "Comportamento de ligar",
             "on_delay": "Atraso após o código de 'ligar'",
             "enabled_hvac_modes": "Modos HVAC habilitados",
-            "enable_light_off": "Apagar a luz do display do aparelho após os comandos",
+            "light_off_behavior": "Controle da luz do display",
             "enable_swing": "Habilitar controle de swing",
             "power_sensor": "Sensor de feedback de energia (opcional)",
             "power_threshold": "Limiar de 'ligado' do sensor (para sensores numéricos)"
@@ -92,7 +93,7 @@
             "power_behavior": "Comportamento de ligar",
             "on_delay": "Atraso após o código de 'ligar'",
             "enabled_hvac_modes": "Modos HVAC habilitados",
-            "enable_light_off": "Apagar a luz do display do aparelho após os comandos",
+            "light_off_behavior": "Controle da luz do display",
             "enable_swing": "Habilitar controle de swing",
             "power_sensor": "Sensor de feedback de energia (opcional)",
             "power_threshold": "Limiar de 'ligado' do sensor (para sensores numéricos)"
@@ -107,6 +108,13 @@
       },
       "abort": {
         "unknown_device": "A definição do dispositivo não foi encontrada."
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connectivity": {
+        "name": "Conectividade"
       }
     }
   },
@@ -142,6 +150,13 @@
         "heat": "Aquecer",
         "dry": "Secar",
         "fan_only": "Ventilar"
+      }
+    },
+    "light_off_behavior": {
+      "options": {
+        "never": "Não controlar a luz do display",
+        "once": "Apagar uma vez ao ligar (o aparelho lembra o estado)",
+        "always": "Apagar após cada comando (o aparelho reseta a cada comando)"
       }
     }
   }

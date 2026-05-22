@@ -32,7 +32,8 @@ CONF_POWER_BEHAVIOR = "power_behavior"
 CONF_ON_DELAY = "on_delay"
 CONF_ENABLED_HVAC_MODES = "enabled_hvac_modes"
 CONF_ENABLE_SWING = "enable_swing"
-CONF_ENABLE_LIGHT_OFF = "enable_light_off"
+CONF_ENABLE_LIGHT_OFF = "enable_light_off"  # legado; substituído por CONF_LIGHT_OFF_BEHAVIOR
+CONF_LIGHT_OFF_BEHAVIOR = "light_off_behavior"
 CONF_POWER_SENSOR = "power_sensor"
 CONF_POWER_THRESHOLD = "power_threshold"
 
@@ -47,6 +48,12 @@ SUPPORTED_DEVICE_TYPES = [DEVICE_TYPE_CLIMATE]
 POWER_STATEFUL = "stateful"      # o código de estado já liga o aparelho
 POWER_EXPLICIT_ON = "explicit_on"  # precisa enviar "ligar" antes do estado
 POWER_BEHAVIORS = [POWER_STATEFUL, POWER_EXPLICIT_ON]
+
+# Comportamentos de controle da luz do display.
+LIGHT_OFF_NEVER = "never"    # não mexe na luz
+LIGHT_OFF_ONCE = "once"      # desliga uma vez ao ligar o aparelho (AC lembra o estado)
+LIGHT_OFF_ALWAYS = "always"  # desliga após cada comando IR (AC reseta a luz a cada comando)
+LIGHT_OFF_BEHAVIORS = [LIGHT_OFF_NEVER, LIGHT_OFF_ONCE, LIGHT_OFF_ALWAYS]
 
 # Modos de swing suportados pelo banco de dados.
 SWING_NONE = "none"
