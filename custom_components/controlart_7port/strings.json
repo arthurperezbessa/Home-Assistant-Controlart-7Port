@@ -115,21 +115,23 @@
           }
         },
         "configure_tv": {
-          "title": "Configure TV",
+          "title": "Configure device",
           "description": "Set up {device}.",
           "data": {
             "name": "Name",
+            "media_player_class": "Device type",
             "ir_port": "7Port output (1-7, or 8 = internal Blaster)",
-            "backing_entity": "Reference entity (already integrated TV)"
+            "backing_entity": "Reference entity (already integrated)"
           }
         },
         "reconfigure_tv": {
-          "title": "Edit TV",
+          "title": "Edit device",
           "description": "Edit {device}.",
           "data": {
             "name": "Name",
+            "media_player_class": "Device type",
             "ir_port": "7Port output (1-7, or 8 = internal Blaster)",
-            "backing_entity": "Reference entity (already integrated TV)"
+            "backing_entity": "Reference entity (already integrated)"
           }
         },
         "new_meta_cover": {
@@ -226,6 +228,13 @@
         "never": "Do not control the display light",
         "once": "Turn off once when powering on (unit remembers the state)",
         "always": "Turn off after every command (unit resets light on each command)"
+      }
+    },
+    "media_player_class": {
+      "options": {
+        "tv": "Smart TV",
+        "receiver": "Receiver / Amplifier",
+        "speaker": "Speaker"
       }
     }
   }

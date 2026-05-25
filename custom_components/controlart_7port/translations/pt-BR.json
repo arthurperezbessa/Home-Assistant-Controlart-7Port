@@ -115,21 +115,23 @@
           }
         },
         "configure_tv": {
-          "title": "Configurar TV",
+          "title": "Configurar aparelho",
           "description": "Configuração de {device}.",
           "data": {
             "name": "Nome",
+            "media_player_class": "Tipo de aparelho",
             "ir_port": "Saída da 7Port (1-7, ou 8 = Blaster interno)",
-            "backing_entity": "Entidade de referência (TV já integrada ao HA)"
+            "backing_entity": "Entidade de referência (já integrada ao HA)"
           }
         },
         "reconfigure_tv": {
-          "title": "Editar TV",
+          "title": "Editar aparelho",
           "description": "Edição de {device}.",
           "data": {
             "name": "Nome",
+            "media_player_class": "Tipo de aparelho",
             "ir_port": "Saída da 7Port (1-7, ou 8 = Blaster interno)",
-            "backing_entity": "Entidade de referência (TV já integrada ao HA)"
+            "backing_entity": "Entidade de referência (já integrada ao HA)"
           }
         },
         "new_meta_cover": {
@@ -226,6 +228,13 @@
         "never": "Não controlar a luz do display",
         "once": "Apagar uma vez ao ligar (o aparelho lembra o estado)",
         "always": "Apagar após cada comando (o aparelho reseta a cada comando)"
+      }
+    },
+    "media_player_class": {
+      "options": {
+        "tv": "Smart TV",
+        "receiver": "Receiver / Amplificador",
+        "speaker": "Caixa de som / Speaker"
       }
     }
   }

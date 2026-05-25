@@ -18,6 +18,7 @@ import logging
 from typing import Any
 
 from homeassistant.components.media_player import (
+    MediaPlayerDeviceClass,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
@@ -46,6 +47,7 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_DEVICE_TYPE,
     CONF_IR_PORT,
+    CONF_MEDIA_PLAYER_CLASS,
     DEVICE_TYPE_TV,
     DOMAIN,
 )
@@ -144,6 +146,13 @@ class SevenPortTV(MediaPlayerEntity, RestoreEntity):
         self._client = client
         self._ir_port: int = int(options[CONF_IR_PORT])
         self._backing_entity_id: str = options[CONF_BACKING_ENTITY]
+
+        # Device class: tv (padrão), receiver ou speaker.
+        _class_str = options.get(CONF_MEDIA_PLAYER_CLASS, "tv")
+        try:
+            self._attr_device_class = MediaPlayerDeviceClass(_class_str)
+        except ValueError:
+            self._attr_device_class = MediaPlayerDeviceClass.TV
 
         self._attr_unique_id = f"{subentry_id}_tv"
         self._attr_device_info = DeviceInfo(
@@ -246,12 +255,12 @@ class SevenPortTV(MediaPlayerEntity, RestoreEntity):
     # -- Comandos IR -----------------------------------------------------------
 
     async def async_turn_on(self) -> None:
-        """Liga a TV via IR."""
-        await self._async_send_ir_cmd(CMD_POWER_ON)
+        """Liga via IR; se não houver código, repassa para a backing entity."""
+        await self._async_send_ir_cmd(CMD_POWER_ON, fallback="turn_on")
 
     async def async_turn_off(self) -> None:
-        """Desliga a TV via IR."""
-        await self._async_send_ir_cmd(CMD_POWER_OFF)
+        """Desliga via IR; se não houver código, repassa para a backing entity."""
+        await self._async_send_ir_cmd(CMD_POWER_OFF, fallback="turn_off")
 
     async def async_select_source(self, source: str) -> None:
         """Seleciona um source via IR — enviado mesmo se a TV ainda estiver offline."""
@@ -304,14 +313,23 @@ class SevenPortTV(MediaPlayerEntity, RestoreEntity):
 
     # -- Utilitários -----------------------------------------------------------
 
-    async def _async_send_ir_cmd(self, cmd: str) -> None:
-        """Envia um código IR de comando (power_on / power_off)."""
+    async def _async_send_ir_cmd(
+        self, cmd: str, fallback: str | None = None
+    ) -> None:
+        """Envia um código IR de comando; se ausente, repassa para a backing entity.
+
+        ``fallback`` é o nome do serviço HA a chamar na backing entity quando
+        não há código IR definido (ex.: ``"turn_on"``, ``"turn_off"``).
+        Útil para receivers onde só o ligar é via IR.
+        """
         code = self._definition.command(cmd)
         if code:
             await self._async_send_ir_code(code)
+        elif fallback:
+            await self._async_call_backing(fallback)
         else:
             _LOGGER.warning(
-                "TV '%s' não tem código IR para '%s'.",
+                "Aparelho '%s' não tem código IR para '%s'.",
                 self._definition.label, cmd,
             )
 
