@@ -266,17 +266,28 @@ _MODE_SHORT_TO_DB = {
 _DB_TO_MODE_SHORT = {v: k for k, v in _MODE_SHORT_TO_DB.items()}
 
 
+_RE_RF_PREFIX = re.compile(r"^sendrf", re.IGNORECASE)
+
+
 def normalize_code(raw: str) -> str | None:
     """Normaliza um código colado para o formato armazenado no banco.
 
-    Aceita o código completo (`sendir,1:8,1,38000,...`), com aspas, ou já
-    "limpo" (`,1,38000,...`). Retorna o trecho após `sendir,1:<porta>`.
+    Comportamento por tipo de código:
+    - **RF** (`sendrf,...` / `sendrf_rc,...`): preservado inteiro — a porta
+      e todos os parâmetros já fazem parte da string capturada no 7Config.
+    - **IR** (`sendir,1:X,...`): o prefixo `sendir,1:<porta>` é removido;
+      armazena somente o payload (`,1,38000,...`), que é reconstituído com
+      a porta configurada pelo usuário na hora do envio.
     """
     if raw is None:
         return None
     code = str(raw).strip().strip('"').strip("'").strip()
     if not code:
         return None
+    # Códigos RF são armazenados e enviados exatamente como capturados.
+    if _RE_RF_PREFIX.match(code):
+        return code
+    # Códigos IR: remove o prefixo sendir,1:X para reutilizar com qualquer porta.
     match = _RE_SENDIR_PREFIX.match(code)
     if match:
         code = match.group(1)
