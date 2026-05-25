@@ -46,8 +46,9 @@ DEVICE_TYPE_TV = "tv"
 DEVICE_TYPE_COVER = "cover"
 SUPPORTED_DEVICE_TYPES = [DEVICE_TYPE_CLIMATE, DEVICE_TYPE_TV, DEVICE_TYPE_COVER]
 
-# Configuração de TV.
+# Configuração de TV / Receiver / Speaker.
 CONF_BACKING_ENTITY = "backing_entity"
+CONF_MEDIA_PLAYER_CLASS = "media_player_class"
 
 # Configuração de cortina/persiana.
 CONF_WINDOW_SENSOR = "window_sensor"

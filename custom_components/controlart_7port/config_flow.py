@@ -28,6 +28,7 @@ from .const import (
     CMD_OPEN,
     CONF_BACKING_ENTITY,
     CONF_BRAND,
+    CONF_MEDIA_PLAYER_CLASS,
     CONF_DEVICE_ID,
     CONF_DEVICE_TYPE,
     CONF_ENABLE_LIGHT_OFF,
@@ -559,6 +560,9 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
                 CONF_MODEL: definition.model,
                 CONF_IR_PORT: user_input[CONF_IR_PORT],
                 CONF_BACKING_ENTITY: user_input[CONF_BACKING_ENTITY],
+                CONF_MEDIA_PLAYER_CLASS: user_input.get(
+                    CONF_MEDIA_PLAYER_CLASS, "tv"
+                ),
             }
             return self.async_create_entry(
                 title=user_input[CONF_NAME].strip(), data=data
@@ -587,6 +591,9 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
                 {
                     CONF_IR_PORT: user_input[CONF_IR_PORT],
                     CONF_BACKING_ENTITY: user_input[CONF_BACKING_ENTITY],
+                    CONF_MEDIA_PLAYER_CLASS: user_input.get(
+                        CONF_MEDIA_PLAYER_CLASS, "tv"
+                    ),
                 }
             )
             return self.async_update_and_abort(
@@ -959,7 +966,7 @@ def _build_configure_schema_tv(
     definition: Any,
     defaults: dict[str, Any] | None,
 ) -> vol.Schema:
-    """Schema do passo de configuração de TV."""
+    """Schema do passo de configuração de TV / Receiver / Speaker."""
     defaults = defaults or {}
     return vol.Schema(
         {
@@ -967,6 +974,15 @@ def _build_configure_schema_tv(
                 CONF_NAME,
                 default=defaults.get(CONF_NAME, definition.label),
             ): str,
+            vol.Required(
+                CONF_MEDIA_PLAYER_CLASS,
+                default=defaults.get(CONF_MEDIA_PLAYER_CLASS, "tv"),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=["tv", "receiver", "speaker"],
+                    translation_key="media_player_class",
+                )
+            ),
             vol.Required(
                 CONF_IR_PORT,
                 default=defaults.get(CONF_IR_PORT, MIN_IR_PORT),
