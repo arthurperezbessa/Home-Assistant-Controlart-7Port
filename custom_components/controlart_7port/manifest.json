@@ -1,7 +1,7 @@
 {
   "domain": "controlart_7port",
   "name": "ControlArt 7Port",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "documentation": "https://github.com/arthurperezbessa/Home-Assistant-Controlart-7Port",
   "issue_tracker": "https://github.com/arthurperezbessa/Home-Assistant-Controlart-7Port/issues",
   "codeowners": ["@arthurperezbessa"],
