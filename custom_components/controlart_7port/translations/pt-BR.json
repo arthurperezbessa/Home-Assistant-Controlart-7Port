@@ -141,8 +141,8 @@
           }
         },
         "new_codes_cover": {
-          "title": "Cole os códigos IR",
-          "description": "Cole um código por linha. `open` e `close` são obrigatórios; `stop` é opcional.\n\nExemplo:\n{example}",
+          "title": "Cole os códigos",
+          "description": "Cole um código por linha. `open` e `close` são obrigatórios; `stop` é opcional.\n\nAceita IR (`sendir,...`) e RF (`sendrf,...` / `sendrf_rc,...`).\n\nExemplo:\n{example}",
           "data": {
             "codes": "Códigos (um por linha)"
           }
@@ -152,7 +152,7 @@
           "description": "Configuração de {device}.",
           "data": {
             "name": "Nome",
-            "ir_port": "Saída da 7Port (1-7, ou 8 = Blaster interno)",
+            "ir_port": "Saída IR da 7Port (1-7, ou 8 = Blaster interno; ignorado para códigos RF)",
             "window_sensor": "Sensor de janela (bloqueia fechamento quando aberta)"
           }
         },
@@ -161,7 +161,7 @@
           "description": "Edição de {device}.",
           "data": {
             "name": "Nome",
-            "ir_port": "Saída da 7Port (1-7, ou 8 = Blaster interno)",
+            "ir_port": "Saída IR da 7Port (1-7, ou 8 = Blaster interno; ignorado para códigos RF)",
             "window_sensor": "Sensor de janela (bloqueia fechamento quando aberta)"
           }
         }

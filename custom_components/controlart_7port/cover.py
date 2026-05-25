@@ -141,13 +141,13 @@ class SevenPortCover(CoverEntity, RestoreEntity):
     # -- Comandos -------------------------------------------------------------
 
     async def async_open_cover(self, **kwargs: Any) -> None:
-        """Abre a cortina via IR."""
-        await self._async_send_ir_cmd(CMD_OPEN)
+        """Abre a cortina."""
+        await self._async_send_cmd(CMD_OPEN)
         self._is_closed = False
         self.async_write_ha_state()
 
     async def async_close_cover(self, **kwargs: Any) -> None:
-        """Fecha a cortina via IR.
+        """Fecha a cortina.
 
         O comando é bloqueado se o sensor de janela configurado indicar que
         a janela está aberta (estado 'on' do binary_sensor).
@@ -163,33 +163,42 @@ class SevenPortCover(CoverEntity, RestoreEntity):
                 )
                 return
 
-        await self._async_send_ir_cmd(CMD_CLOSE)
+        await self._async_send_cmd(CMD_CLOSE)
         self._is_closed = True
         self.async_write_ha_state()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
-        """Para o movimento da cortina via IR."""
-        await self._async_send_ir_cmd(CMD_STOP)
+        """Para o movimento da cortina."""
+        await self._async_send_cmd(CMD_STOP)
         self.async_write_ha_state()
 
     # -- Utilitários ----------------------------------------------------------
 
-    async def _async_send_ir_cmd(self, cmd: str) -> None:
-        """Envia um código IR de comando para a porta configurada."""
+    async def _async_send_cmd(self, cmd: str) -> None:
+        """Envia um código de comando (IR ou RF) para a 7Port.
+
+        - Códigos RF (`sendrf,...` / `sendrf_rc,...`): enviados como string
+          completa via ``async_send_raw`` — a porta já está embutida no código
+          capturado no 7Config.
+        - Códigos IR: enviados via ``async_send_ir`` com a porta configurada
+          pelo usuário na integração.
+        """
         code = self._definition.command(cmd)
         if not code:
             _LOGGER.warning(
-                "Cortina '%s' não tem código IR para o comando '%s'.",
+                "Cortina '%s' não tem código para o comando '%s'.",
                 self.name,
                 cmd,
             )
             return
         try:
-            await self._client.async_send_ir(self._ir_port, code)
+            if code.lower().startswith("sendrf"):
+                await self._client.async_send_raw(code)
+            else:
+                await self._client.async_send_ir(self._ir_port, code)
         except SevenPortError as err:
             _LOGGER.error(
-                "Falha ao enviar IR para cortina '%s' (porta %s): %s",
+                "Falha ao enviar comando para cortina '%s': %s",
                 self.name,
-                self._ir_port,
                 err,
             )

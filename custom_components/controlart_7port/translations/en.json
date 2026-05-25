@@ -141,8 +141,8 @@
           }
         },
         "new_codes_cover": {
-          "title": "Paste the IR codes",
-          "description": "Paste one code per line. `open` and `close` are required; `stop` is optional.\n\nExample:\n{example}",
+          "title": "Paste the codes",
+          "description": "Paste one code per line. `open` and `close` are required; `stop` is optional.\n\nAccepts IR (`sendir,...`) and RF (`sendrf,...` / `sendrf_rc,...`).\n\nExample:\n{example}",
           "data": {
             "codes": "Codes (one per line)"
           }
@@ -152,7 +152,7 @@
           "description": "Set up {device}.",
           "data": {
             "name": "Name",
-            "ir_port": "7Port output (1-7, or 8 = internal Blaster)",
+            "ir_port": "7Port IR output (1-7, or 8 = internal Blaster; ignored for RF codes)",
             "window_sensor": "Window sensor (blocks closing when window is open)"
           }
         },
@@ -161,7 +161,7 @@
           "description": "Edit {device}.",
           "data": {
             "name": "Name",
-            "ir_port": "7Port output (1-7, or 8 = internal Blaster)",
+            "ir_port": "7Port IR output (1-7, or 8 = internal Blaster; ignored for RF codes)",
             "window_sensor": "Window sensor (blocks closing when window is open)"
           }
         }
