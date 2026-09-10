@@ -121,6 +121,40 @@ class SevenPortConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=schema, errors=errors
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Atualiza o IP/porta da 7Port já configurada."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            host = user_input[CONF_HOST].strip()
+            port = user_input[CONF_PORT]
+            client = SevenPortClient(host, port)
+            if not await client.async_test_connection():
+                errors["base"] = "cannot_connect"
+            else:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data={CONF_HOST: host, CONF_PORT: port},
+                )
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_HOST, default=entry.data.get(CONF_HOST, "")
+                ): str,
+                vol.Required(
+                    CONF_PORT,
+                    default=entry.data.get(CONF_PORT, DEFAULT_PORT),
+                ): vol.All(int, vol.Range(min=1, max=65535)),
+            }
+        )
+        return self.async_show_form(
+            step_id="reconfigure", data_schema=schema, errors=errors
+        )
+
     @classmethod
     @callback
     def async_get_supported_subentry_types(
