@@ -25,7 +25,9 @@ from homeassistant.helpers import selector
 
 from .const import (
     CMD_CLOSE,
+    CMD_DOWN,
     CMD_OPEN,
+    CMD_UP,
     CONF_BACKING_ENTITY,
     CONF_BRAND,
     CONF_MEDIA_PLAYER_CLASS,
@@ -50,6 +52,7 @@ from .const import (
     DEFAULT_POWER_THRESHOLD,
     DEVICE_TYPE_CLIMATE,
     DEVICE_TYPE_COVER,
+    DEVICE_TYPE_FLAP,
     DEVICE_TYPE_TV,
     DOMAIN,
     LIGHT_OFF_BEHAVIORS,
@@ -70,11 +73,13 @@ from .device_db import (
     async_get_database,
     build_climate_definition,
     build_cover_definition,
+    build_flap_definition,
     build_tv_definition,
     definition_to_yaml,
     expected_state_keys,
     parse_code_block,
     parse_cover_code_block,
+    parse_flap_code_block,
     parse_tv_code_block,
 )
 from .tcp import SevenPortClient
@@ -157,7 +162,12 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
                     CONF_DEVICE_TYPE, default=DEVICE_TYPE_CLIMATE
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=[DEVICE_TYPE_CLIMATE, DEVICE_TYPE_TV, DEVICE_TYPE_COVER],
+                        options=[
+                            DEVICE_TYPE_CLIMATE,
+                            DEVICE_TYPE_TV,
+                            DEVICE_TYPE_COVER,
+                            DEVICE_TYPE_FLAP,
+                        ],
                         translation_key="device_type",
                     )
                 )
@@ -239,6 +249,8 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             return await self.async_step_new_meta_tv()
         if self._device_type == DEVICE_TYPE_COVER:
             return await self.async_step_new_meta_cover()
+        if self._device_type == DEVICE_TYPE_FLAP:
+            return await self.async_step_new_meta_flap()
         return await self.async_step_new_meta()
 
     async def _async_step_configure_dispatch(self) -> SubentryFlowResult:
@@ -246,6 +258,8 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             return await self.async_step_configure_tv()
         if self._device_type == DEVICE_TYPE_COVER:
             return await self.async_step_configure_cover()
+        if self._device_type == DEVICE_TYPE_FLAP:
+            return await self.async_step_configure_flap()
         return await self.async_step_configure()
 
     # -- Assistente: criar definição de dispositivo (climate) ----------------
@@ -755,6 +769,144 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             description_placeholders={"device": definition.label},
         )
 
+    # -- Wizard flap: nova definição -----------------------------------------
+
+    async def async_step_new_meta_flap(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Coleta marca e modelo da nova definição de flap."""
+        if user_input is not None:
+            self._new_meta = {
+                CONF_BRAND: user_input[CONF_BRAND].strip(),
+                CONF_MODEL: user_input[CONF_MODEL].strip(),
+            }
+            return await self.async_step_new_codes_flap()
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_BRAND, default=self._brand or ""): str,
+                vol.Required(CONF_MODEL, default="Genérico"): str,
+            }
+        )
+        return self.async_show_form(step_id="new_meta_flap", data_schema=schema)
+
+    async def async_step_new_codes_flap(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Recebe os códigos do flap (subir/descer obrigatórios)."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            parsed = parse_flap_code_block(user_input["codes"])
+            has_up = CMD_UP in parsed.commands
+            has_down = CMD_DOWN in parsed.commands
+            if parsed.errors and not (has_up and has_down):
+                errors["base"] = "parse_errors"
+            elif not (has_up and has_down):
+                errors["base"] = "flap_missing_codes"
+            else:
+                meta = self._new_meta
+                database = await async_get_database(self.hass)
+                device_id = database.unique_id(
+                    f"{meta[CONF_BRAND]}_{meta[CONF_MODEL]}"
+                )
+                definition = build_flap_definition(
+                    device_id=device_id,
+                    brand=meta[CONF_BRAND],
+                    model=meta[CONF_MODEL],
+                    parsed=parsed,
+                )
+                await database.async_add_custom(definition)
+                self._brand = definition[CONF_BRAND]
+                self._device_id = device_id
+                _LOGGER.info(
+                    "Definição de flap criada (%s). YAML:\n%s",
+                    device_id,
+                    definition_to_yaml(definition),
+                )
+                return await self.async_step_configure_flap()
+
+        example = (
+            "up: sendrf,2,1,1,864,...\n"
+            "down: sendrf,2,1,1,864,...\n"
+            "left: sendrf,2,1,1,864,...   # opcional\n"
+            "right: sendrf,2,1,1,864,...  # opcional\n"
+            "stop: sendrf,2,1,1,864,...   # opcional"
+        )
+        schema = vol.Schema(
+            {
+                vol.Required("codes"): selector.TextSelector(
+                    selector.TextSelectorConfig(multiline=True)
+                )
+            }
+        )
+        return self.async_show_form(
+            step_id="new_codes_flap",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"example": example},
+        )
+
+    # -- Configuração / reconfiguração de flap --------------------------------
+
+    async def async_step_configure_flap(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Configura a porta IR do flap."""
+        database = await async_get_database(self.hass)
+        definition = database.get(self._device_id or "")
+        if definition is None:
+            return self.async_abort(reason="unknown_device")
+
+        if user_input is not None:
+            data: dict[str, Any] = {
+                CONF_DEVICE_TYPE: DEVICE_TYPE_FLAP,
+                CONF_DEVICE_ID: definition.id,
+                CONF_BRAND: definition.brand,
+                CONF_MODEL: definition.model,
+                CONF_IR_PORT: user_input[CONF_IR_PORT],
+            }
+            return self.async_create_entry(
+                title=user_input[CONF_NAME].strip(), data=data
+            )
+
+        schema = _build_configure_schema_flap(definition, defaults=None)
+        return self.async_show_form(
+            step_id="configure_flap",
+            data_schema=schema,
+            description_placeholders={"device": definition.label},
+        )
+
+    async def async_step_reconfigure_flap(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edita um flap já cadastrado."""
+        subentry = self._get_reconfigure_subentry()
+        database = await async_get_database(self.hass)
+        definition = database.get(subentry.data.get(CONF_DEVICE_ID, ""))
+        if definition is None:
+            return self.async_abort(reason="unknown_device")
+
+        if user_input is not None:
+            data = dict(subentry.data)
+            data[CONF_IR_PORT] = user_input[CONF_IR_PORT]
+            return self.async_update_and_abort(
+                self._get_entry(),
+                subentry,
+                title=user_input[CONF_NAME].strip(),
+                data=data,
+            )
+
+        schema = _build_configure_schema_flap(
+            definition,
+            defaults={CONF_NAME: subentry.title, **subentry.data},
+        )
+        return self.async_show_form(
+            step_id="reconfigure_flap",
+            data_schema=schema,
+            description_placeholders={"device": definition.label},
+        )
+
     # -- Reconfiguração de um aparelho existente (climate) -----------------
 
     async def async_step_reconfigure(
@@ -767,6 +919,8 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             return await self.async_step_reconfigure_tv(user_input)
         if device_type == DEVICE_TYPE_COVER:
             return await self.async_step_reconfigure_cover(user_input)
+        if device_type == DEVICE_TYPE_FLAP:
+            return await self.async_step_reconfigure_flap(user_input)
 
         database = await async_get_database(self.hass)
         definition = database.get(subentry.data.get(CONF_DEVICE_ID, ""))
@@ -958,6 +1112,26 @@ def _build_configure_schema_cover(
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor")
             ),
+        }
+    )
+
+
+def _build_configure_schema_flap(
+    definition: Any,
+    defaults: dict[str, Any] | None,
+) -> vol.Schema:
+    """Schema do passo de configuração de flap motorizado de TV."""
+    defaults = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_NAME,
+                default=defaults.get(CONF_NAME, definition.label),
+            ): str,
+            vol.Required(
+                CONF_IR_PORT,
+                default=defaults.get(CONF_IR_PORT, MIN_IR_PORT),
+            ): vol.All(int, vol.Range(min=MIN_IR_PORT, max=MAX_IR_PORT)),
         }
     )
 

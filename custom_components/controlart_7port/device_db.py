@@ -26,17 +26,22 @@ from homeassistant.util import slugify
 
 from .const import (
     CMD_CLOSE,
+    CMD_DOWN,
+    CMD_LEFT,
     CMD_LIGHT_OFF,
     CMD_OPEN,
     CMD_POWER_OFF,
     CMD_POWER_ON,
+    CMD_RIGHT,
     CMD_STOP,
     CMD_SWING_OFF,
     CMD_SWING_ON,
+    CMD_UP,
     DB_FAN_MODES,
     DB_HVAC_MODES,
     DEVICE_TYPE_CLIMATE,
     DEVICE_TYPE_COVER,
+    DEVICE_TYPE_FLAP,
     DEVICE_TYPE_TV,
     DOMAIN,
     POWER_BEHAVIORS,
@@ -593,6 +598,80 @@ def build_cover_definition(
     }
 
 
+def parse_flap_code_block(text: str) -> CodeParseResult:
+    """Analisa um bloco de texto com códigos de flap motorizado de TV.
+
+    Formato esperado — uma linha por comando::
+
+        up:    sendrf,2,1,1,864,...
+        down:  sendrf,2,1,1,864,...
+        left:  sendrf,2,1,1,864,...   # opcional
+        right: sendrf,2,1,1,864,...   # opcional
+        stop:  sendrf,2,1,1,864,...   # opcional
+
+    Aceita sinônimos em português.
+    """
+    _ALIASES: dict[str, str] = {
+        "up": CMD_UP, "subir": CMD_UP, "sobe": CMD_UP, "cima": CMD_UP,
+        "down": CMD_DOWN, "descer": CMD_DOWN, "desce": CMD_DOWN, "baixo": CMD_DOWN,
+        "left": CMD_LEFT, "esquerda": CMD_LEFT,
+        "right": CMD_RIGHT, "direita": CMD_RIGHT,
+        "stop": CMD_STOP, "parar": CMD_STOP, "para": CMD_STOP,
+    }
+
+    result = CodeParseResult()
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            result.errors.append(f"Linha {lineno}: faltou ':' — '{line[:40]}'")
+            continue
+        name, _, value = line.partition(":")
+        name = name.strip()
+        code = normalize_code(value)
+        if not code:
+            result.errors.append(f"Linha {lineno}: código vazio para '{name}'")
+            continue
+        cmd = _ALIASES.get(name.lower())
+        if cmd is not None:
+            result.commands[cmd] = code
+        else:
+            result.unknown.append(name)
+
+    return result
+
+
+def build_flap_definition(
+    *,
+    device_id: str,
+    brand: str,
+    model: str,
+    parsed: CodeParseResult,
+) -> dict[str, Any]:
+    """Monta o dicionário de definição de um flap motorizado de TV.
+
+    ``up`` e ``down`` movem o eixo vertical (entidade cover). ``left`` e
+    ``right`` giram o eixo horizontal e viram botões — ambos opcionais,
+    para flaps que só sobem e descem.
+    """
+    commands: dict[str, Any] = {
+        CMD_UP: parsed.commands.get(CMD_UP),
+        CMD_DOWN: parsed.commands.get(CMD_DOWN),
+    }
+    for optional in (CMD_LEFT, CMD_RIGHT, CMD_STOP):
+        code = parsed.commands.get(optional)
+        if code:
+            commands[optional] = code
+    return {
+        "id": device_id,
+        "brand": brand,
+        "model": model,
+        "device_type": DEVICE_TYPE_FLAP,
+        "commands": commands,
+    }
+
+
 def definition_to_yaml(definition: dict[str, Any]) -> str:
     """Serializa uma definição em YAML (para o usuário contribuir no repo)."""
 
@@ -652,11 +731,13 @@ __all__ = [
     "async_get_database",
     "build_climate_definition",
     "build_cover_definition",
+    "build_flap_definition",
     "build_tv_definition",
     "definition_to_yaml",
     "expected_state_keys",
     "normalize_code",
     "parse_code_block",
     "parse_cover_code_block",
+    "parse_flap_code_block",
     "parse_tv_code_block",
 ]

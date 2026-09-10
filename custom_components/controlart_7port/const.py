@@ -44,7 +44,13 @@ DEFAULT_POWER_THRESHOLD = 0.1
 DEVICE_TYPE_CLIMATE = "climate"
 DEVICE_TYPE_TV = "tv"
 DEVICE_TYPE_COVER = "cover"
-SUPPORTED_DEVICE_TYPES = [DEVICE_TYPE_CLIMATE, DEVICE_TYPE_TV, DEVICE_TYPE_COVER]
+DEVICE_TYPE_FLAP = "flap"
+SUPPORTED_DEVICE_TYPES = [
+    DEVICE_TYPE_CLIMATE,
+    DEVICE_TYPE_TV,
+    DEVICE_TYPE_COVER,
+    DEVICE_TYPE_FLAP,
+]
 
 # Configuração de TV / Receiver / Speaker.
 CONF_BACKING_ENTITY = "backing_entity"
@@ -78,6 +84,10 @@ CMD_SWING_OFF = "swing_off"
 CMD_OPEN = "open"
 CMD_CLOSE = "close"
 CMD_STOP = "stop"
+CMD_UP = "up"
+CMD_DOWN = "down"
+CMD_LEFT = "left"
+CMD_RIGHT = "right"
 
 # Modos HVAC reconhecidos no banco de dados.
 DB_HVAC_MODES = ["cool", "heat", "dry", "fan_only"]

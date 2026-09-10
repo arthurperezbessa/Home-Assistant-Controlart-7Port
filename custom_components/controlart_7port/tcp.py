@@ -105,6 +105,18 @@ class SevenPortClient:
         command = f"sendir,1:{ir_port}{payload}"
         await self.async_send_raw(command)
 
+    async def async_send_code(self, ir_port: int, code: str) -> None:
+        """Envia um código do banco de dispositivos, IR ou RF.
+
+        Códigos RF (`sendrf,...` / `sendrf_rc,...`) carregam a porta e todos
+        os parâmetros na própria string capturada no 7Config, então seguem
+        inteiros. Códigos IR são reconstituídos com a porta configurada.
+        """
+        if code.lower().startswith("sendrf"):
+            await self.async_send_raw(code)
+        else:
+            await self.async_send_ir(ir_port, code)
+
     async def async_test_connection(self) -> bool:
         """Testa se é possível abrir uma conexão TCP com a 7Port.
 
