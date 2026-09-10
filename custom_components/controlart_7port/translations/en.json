@@ -10,6 +10,14 @@
           "host": "IP address",
           "port": "TCP port"
         }
+      },
+      "reconfigure": {
+        "title": "Update 7Port connection",
+        "description": "Enter the new IP address and port for your ControlArt 7Port.",
+        "data": {
+          "host": "IP address",
+          "port": "TCP port"
+        }
       }
     },
     "error": {

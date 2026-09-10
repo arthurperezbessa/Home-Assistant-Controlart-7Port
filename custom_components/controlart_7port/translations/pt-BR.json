@@ -10,6 +10,14 @@
           "host": "Endereço IP",
           "port": "Porta TCP"
         }
+      },
+      "reconfigure": {
+        "title": "Atualizar conexão da 7Port",
+        "description": "Informe o novo endereço IP e porta da sua ControlArt 7Port.",
+        "data": {
+          "host": "Endereço IP",
+          "port": "Porta TCP"
+        }
       }
     },
     "error": {
