@@ -174,6 +174,37 @@
             "ir_port": "Saída IR da 7Port (1-7, ou 8 = Blaster interno; ignorado para códigos RF)",
             "window_sensor": "Sensor de janela (bloqueia fechamento quando aberta)"
           }
+        },
+        "new_meta_flap": {
+          "title": "Nova definição de flap",
+          "description": "Informe a marca e o modelo do flap motorizado de TV.",
+          "data": {
+            "brand": "Marca",
+            "model": "Modelo"
+          }
+        },
+        "new_codes_flap": {
+          "title": "Cole os códigos",
+          "description": "Cole um código por linha. `up` (subir) e `down` (descer) são obrigatórios e controlam o flap como uma cortina; `left`, `right` e `stop` são opcionais. `left` e `right` viram botões, criados apenas quando o código existe.\n\nAceita IR (`sendir,...`) e RF (`sendrf,...` / `sendrf_rc,...`).\n\nExemplo:\n{example}",
+          "data": {
+            "codes": "Códigos (um por linha)"
+          }
+        },
+        "configure_flap": {
+          "title": "Configurar flap",
+          "description": "Configuração de {device}.",
+          "data": {
+            "name": "Nome",
+            "ir_port": "Saída IR da 7Port (1-7, ou 8 = Blaster interno; ignorado para códigos RF)"
+          }
+        },
+        "reconfigure_flap": {
+          "title": "Editar flap",
+          "description": "Edição de {device}.",
+          "data": {
+            "name": "Nome",
+            "ir_port": "Saída IR da 7Port (1-7, ou 8 = Blaster interno; ignorado para códigos RF)"
+          }
         }
       },
       "error": {
@@ -181,7 +212,8 @@
         "no_fan_modes": "Selecione ao menos uma velocidade de ventilação.",
         "parse_errors": "Algumas linhas não puderam ser lidas. Confira o formato `nome: código`.",
         "no_states": "Nenhum código de estado foi reconhecido. Use nomes como `Temp-auto22`.",
-        "cover_missing_codes": "Os códigos `open` (abrir) e `close` (fechar) são obrigatórios."
+        "cover_missing_codes": "Os códigos `open` (abrir) e `close` (fechar) são obrigatórios.",
+        "flap_missing_codes": "Os códigos `up` (subir) e `down` (descer) são obrigatórios."
       },
       "abort": {
         "unknown_device": "A definição do dispositivo não foi encontrada."
@@ -193,6 +225,14 @@
       "connectivity": {
         "name": "Conectividade"
       }
+    },
+    "button": {
+      "flap_left": {
+        "name": "Girar para a esquerda"
+      },
+      "flap_right": {
+        "name": "Girar para a direita"
+      }
     }
   },
   "selector": {
@@ -200,7 +240,8 @@
       "options": {
         "climate": "Ar-condicionado",
         "tv": "Smart TV",
-        "cover": "Cortina / Persiana"
+        "cover": "Cortina / Persiana",
+        "flap": "Flap / Suporte de TV"
       }
     },
     "power_behavior": {

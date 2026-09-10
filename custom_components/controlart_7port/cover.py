@@ -28,13 +28,16 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from . import SevenPortConfigEntry
 from .const import (
     CMD_CLOSE,
+    CMD_DOWN,
     CMD_OPEN,
     CMD_STOP,
+    CMD_UP,
     CONF_DEVICE_ID,
     CONF_DEVICE_TYPE,
     CONF_IR_PORT,
     CONF_WINDOW_SENSOR,
     DEVICE_TYPE_COVER,
+    DEVICE_TYPE_FLAP,
     DOMAIN,
 )
 from .device_db import DeviceDefinition, async_get_database
@@ -53,18 +56,22 @@ async def async_setup_entry(
     client = entry.runtime_data.client
 
     for subentry_id, subentry in entry.subentries.items():
-        if subentry.data.get(CONF_DEVICE_TYPE) != DEVICE_TYPE_COVER:
+        device_type = subentry.data.get(CONF_DEVICE_TYPE)
+        if device_type not in (DEVICE_TYPE_COVER, DEVICE_TYPE_FLAP):
             continue
         definition = database.get(subentry.data.get(CONF_DEVICE_ID, ""))
         if definition is None:
             _LOGGER.warning(
-                "Subentry '%s' referencia uma definição de cortina inexistente (%s); ignorado.",
+                "Subentry '%s' referencia uma definição inexistente (%s); ignorado.",
                 subentry.title,
                 subentry.data.get(CONF_DEVICE_ID),
             )
             continue
 
-        entity = SevenPortCover(
+        entity_class = (
+            SevenPortFlap if device_type == DEVICE_TYPE_FLAP else SevenPortCover
+        )
+        entity = entity_class(
             entry_id=entry.entry_id,
             subentry_id=subentry_id,
             name=subentry.title,
@@ -73,6 +80,28 @@ async def async_setup_entry(
             client=client,
         )
         async_add_entities([entity], config_subentry_id=subentry_id)
+
+
+async def _async_send_command(
+    client: SevenPortClient,
+    definition: DeviceDefinition,
+    ir_port: int,
+    cmd: str,
+    entity_name: Any,
+) -> None:
+    """Resolve o código de um comando na definição e envia para a 7Port."""
+    code = definition.command(cmd)
+    if not code:
+        _LOGGER.warning(
+            "'%s' não tem código para o comando '%s'.", entity_name, cmd
+        )
+        return
+    try:
+        await client.async_send_code(ir_port, code)
+    except SevenPortError as err:
+        _LOGGER.error(
+            "Falha ao enviar '%s' para '%s': %s", cmd, entity_name, err
+        )
 
 
 class SevenPortCover(CoverEntity, RestoreEntity):
@@ -175,30 +204,90 @@ class SevenPortCover(CoverEntity, RestoreEntity):
     # -- Utilitários ----------------------------------------------------------
 
     async def _async_send_cmd(self, cmd: str) -> None:
-        """Envia um código de comando (IR ou RF) para a 7Port.
+        """Envia um código de comando (IR ou RF) para a 7Port."""
+        await _async_send_command(
+            self._client, self._definition, self._ir_port, cmd, self.name
+        )
 
-        - Códigos RF (`sendrf,...` / `sendrf_rc,...`): enviados como string
-          completa via ``async_send_raw`` — a porta já está embutida no código
-          capturado no 7Config.
-        - Códigos IR: enviados via ``async_send_ir`` com a porta configurada
-          pelo usuário na integração.
-        """
-        code = self._definition.command(cmd)
-        if not code:
-            _LOGGER.warning(
-                "Cortina '%s' não tem código para o comando '%s'.",
-                self.name,
-                cmd,
-            )
-            return
-        try:
-            if code.lower().startswith("sendrf"):
-                await self._client.async_send_raw(code)
-            else:
-                await self._client.async_send_ir(self._ir_port, code)
-        except SevenPortError as err:
-            _LOGGER.error(
-                "Falha ao enviar comando para cortina '%s': %s",
-                self.name,
-                err,
-            )
+
+class SevenPortFlap(CoverEntity, RestoreEntity):
+    """Eixo vertical de um flap motorizado de TV.
+
+    Sobe e desce o flap via RF/IR. O giro horizontal fica em entidades
+    `button` separadas, já que o Home Assistant não representa movimento
+    lateral em um cover — as setas de um cover são sempre cima/baixo.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = None
+    _attr_should_poll = False
+    _attr_device_class = CoverDeviceClass.SHUTTER
+
+    def __init__(
+        self,
+        *,
+        entry_id: str,
+        subentry_id: str,
+        name: str,
+        options: dict[str, Any],
+        definition: DeviceDefinition,
+        client: SevenPortClient,
+    ) -> None:
+        """Inicializa a entidade."""
+        self._definition = definition
+        self._client = client
+        self._ir_port: int = int(options[CONF_IR_PORT])
+
+        self._attr_unique_id = f"{subentry_id}_flap"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, subentry_id)},
+            name=name,
+            manufacturer=definition.brand,
+            model=definition.model,
+            via_device=(DOMAIN, entry_id),
+        )
+
+        self._is_closed: bool | None = None
+
+        features = CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
+        if definition.command(CMD_STOP):
+            features |= CoverEntityFeature.STOP
+        self._attr_supported_features = features
+
+    async def async_added_to_hass(self) -> None:
+        """Restaura a última posição conhecida após reinício do HA."""
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None:
+            if last.state == STATE_CLOSED:
+                self._is_closed = True
+            elif last.state in (STATE_OPEN, "opening", "closing"):
+                self._is_closed = False
+
+    @property
+    def is_closed(self) -> bool | None:
+        """True se recolhido (embaixo), False se estendido (em cima)."""
+        return self._is_closed
+
+    async def async_open_cover(self, **kwargs: Any) -> None:
+        """Sobe o flap."""
+        await self._async_send_cmd(CMD_UP)
+        self._is_closed = False
+        self.async_write_ha_state()
+
+    async def async_close_cover(self, **kwargs: Any) -> None:
+        """Desce o flap."""
+        await self._async_send_cmd(CMD_DOWN)
+        self._is_closed = True
+        self.async_write_ha_state()
+
+    async def async_stop_cover(self, **kwargs: Any) -> None:
+        """Para o movimento do flap."""
+        await self._async_send_cmd(CMD_STOP)
+        self.async_write_ha_state()
+
+    async def _async_send_cmd(self, cmd: str) -> None:
+        """Envia um código de comando (IR ou RF) para a 7Port."""
+        await _async_send_command(
+            self._client, self._definition, self._ir_port, cmd, self.name
+        )

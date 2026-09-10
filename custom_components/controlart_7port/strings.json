@@ -174,6 +174,37 @@
             "ir_port": "7Port IR output (1-7, or 8 = internal Blaster; ignored for RF codes)",
             "window_sensor": "Window sensor (blocks closing when window is open)"
           }
+        },
+        "new_meta_flap": {
+          "title": "New flap definition",
+          "description": "Enter the brand and model of the motorised TV flap.",
+          "data": {
+            "brand": "Brand",
+            "model": "Model"
+          }
+        },
+        "new_codes_flap": {
+          "title": "Paste the codes",
+          "description": "Paste one code per line. `up` and `down` are required and drive the flap as a cover; `left`, `right` and `stop` are optional. Each of `left` and `right` becomes a button, created only when its code is present.\n\nAccepts IR (`sendir,...`) and RF (`sendrf,...` / `sendrf_rc,...`).\n\nExample:\n{example}",
+          "data": {
+            "codes": "Codes (one per line)"
+          }
+        },
+        "configure_flap": {
+          "title": "Configure flap",
+          "description": "Set up {device}.",
+          "data": {
+            "name": "Name",
+            "ir_port": "7Port IR output (1-7, or 8 = internal Blaster; ignored for RF codes)"
+          }
+        },
+        "reconfigure_flap": {
+          "title": "Edit flap",
+          "description": "Edit {device}.",
+          "data": {
+            "name": "Name",
+            "ir_port": "7Port IR output (1-7, or 8 = internal Blaster; ignored for RF codes)"
+          }
         }
       },
       "error": {
@@ -181,7 +212,8 @@
         "no_fan_modes": "Select at least one fan speed.",
         "parse_errors": "Some lines could not be read. Check the format `name: code`.",
         "no_states": "No state codes were recognized. Use names like `Temp-auto22`.",
-        "cover_missing_codes": "The `open` and `close` codes are required."
+        "cover_missing_codes": "The `open` and `close` codes are required.",
+        "flap_missing_codes": "The `up` and `down` codes are required."
       },
       "abort": {
         "unknown_device": "The device definition could not be found."
@@ -193,6 +225,14 @@
       "connectivity": {
         "name": "Connectivity"
       }
+    },
+    "button": {
+      "flap_left": {
+        "name": "Rotate left"
+      },
+      "flap_right": {
+        "name": "Rotate right"
+      }
     }
   },
   "selector": {
@@ -200,7 +240,8 @@
       "options": {
         "climate": "Air conditioner",
         "tv": "Smart TV",
-        "cover": "Cover / Blind"
+        "cover": "Cover / Blind",
+        "flap": "TV flap / mount"
       }
     },
     "power_behavior": {
