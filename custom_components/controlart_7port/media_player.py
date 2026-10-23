@@ -255,8 +255,17 @@ class SevenPortTV(MediaPlayerEntity, RestoreEntity):
     # -- Comandos IR -----------------------------------------------------------
 
     async def async_turn_on(self) -> None:
-        """Liga via IR; se não houver código, repassa para a backing entity."""
-        await self._async_send_ir_cmd(CMD_POWER_ON, fallback="turn_on")
+        """Liga via IR e também pela integração nativa.
+
+        O nativo vai sempre, como redundância: o IR pode ser entregue pela
+        7Port e mesmo assim não ligar a TV (emissor fora de posição), e a
+        7Port pode estar inacessível.
+        """
+        code = self._definition.command(CMD_POWER_ON)
+        if code:
+            await self._async_send_ir_code(code)
+        if self._backing_supports(MediaPlayerEntityFeature.TURN_ON):
+            await self._async_call_backing("turn_on")
 
     async def async_turn_off(self) -> None:
         """Desliga via IR; se não houver código, repassa para a backing entity."""
@@ -342,6 +351,13 @@ class SevenPortTV(MediaPlayerEntity, RestoreEntity):
                 "Falha ao enviar IR para TV '%s' (porta %s): %s",
                 self._definition.label, self._ir_port, err,
             )
+
+    def _backing_supports(self, feature: MediaPlayerEntityFeature) -> bool:
+        """Indica se a backing entity anuncia suporte à feature."""
+        state = self.hass.states.get(self._backing_entity_id)
+        if state is None:
+            return False
+        return bool(int(state.attributes.get("supported_features") or 0) & feature)
 
     async def _async_call_backing(
         self, service: str, extra: dict[str, Any] | None = None
