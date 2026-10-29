@@ -205,6 +205,22 @@
             "name": "Name",
             "ir_port": "7Port IR output (1-7, or 8 = internal Blaster; ignored for RF codes)"
           }
+        },
+        "configure_command": {
+          "title": "Raw command",
+          "description": "The name becomes an action you can call from any automation, script or dashboard button: \"Turn on projector\" becomes `controlart_7port.turn_on_projector`.\n\nPaste the full command, such as `sendir,1:3,...` or `sendrf,...`. It is sent to the 7Port exactly as typed, so leave out any `echo` / `nc` wrapper from an old `shell_command`.",
+          "data": {
+            "name": "Name",
+            "command": "Command"
+          }
+        },
+        "reconfigure_command": {
+          "title": "Edit raw command",
+          "description": "Current action: `{service}`.\n\nRenaming changes the action name, and automations that call the old name stop working. The command is sent to the 7Port exactly as typed.",
+          "data": {
+            "name": "Name",
+            "command": "Command"
+          }
         }
       },
       "error": {
@@ -213,7 +229,10 @@
         "parse_errors": "Some lines could not be read. Check the format `name: code`.",
         "no_states": "No state codes were recognized. Use names like `Temp-auto22`.",
         "cover_missing_codes": "The `open` and `close` codes are required.",
-        "flap_missing_codes": "The `up` and `down` codes are required."
+        "flap_missing_codes": "The `up` and `down` codes are required.",
+        "invalid_command_name": "The name must contain at least one letter or number.",
+        "command_name_taken": "Another raw command already uses this action name. Choose a different name.",
+        "empty_command": "Enter the command to send."
       },
       "abort": {
         "unknown_device": "The device definition could not be found."
@@ -241,7 +260,8 @@
         "climate": "Air conditioner",
         "tv": "Smart TV",
         "cover": "Cover / Blind",
-        "flap": "TV flap / mount"
+        "flap": "TV flap / mount",
+        "command": "Raw command (action)"
       }
     },
     "power_behavior": {

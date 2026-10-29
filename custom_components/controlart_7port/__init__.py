@@ -14,6 +14,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
+from .commands import async_register_commands, async_unregister_commands
 from .const import CONF_HOST, CONF_PORT, DOMAIN
 from .device_db import async_get_database
 from .tcp import SevenPortClient
@@ -61,6 +62,10 @@ async def async_setup_entry(
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    services = async_register_commands(hass, entry, client)
+    entry.async_on_unload(lambda: async_unregister_commands(hass, services))
+
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 
