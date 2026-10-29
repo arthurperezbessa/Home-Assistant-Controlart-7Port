@@ -32,6 +32,7 @@ from .const import (
     CMD_OPEN,
     CMD_POWER_OFF,
     CMD_POWER_ON,
+    CMD_POWER_TOGGLE,
     CMD_RIGHT,
     CMD_STOP,
     CMD_SWING_OFF,
@@ -470,13 +471,15 @@ def parse_tv_code_block(text: str) -> CodeParseResult:
 
     Formato esperado — uma linha por comando::
 
-        power_on:  sendir,1:8,...
-        power_off: sendir,1:8,...
-        HDMI 1:    sendir,1:8,...
-        Netflix:   sendir,1:8,...
+        power_on:     sendir,1:8,...
+        power_off:    sendir,1:8,...
+        power_toggle: sendir,1:8,...
+        HDMI 1:       sendir,1:8,...
+        Netflix:      sendir,1:8,...
 
-    ``power_on`` e ``power_off`` (e sinônimos em português) são tratados como
-    comandos especiais. Qualquer outra linha vira um *source* da TV.
+    ``power_on``, ``power_off`` e ``power_toggle`` (e sinônimos em português)
+    são tratados como comandos especiais. Qualquer outra linha vira um
+    *source* da TV.
     """
     _ALIASES: dict[str, str] = {
         "power_on": CMD_POWER_ON,
@@ -485,6 +488,9 @@ def parse_tv_code_block(text: str) -> CodeParseResult:
         "power_off": CMD_POWER_OFF,
         "desligar": CMD_POWER_OFF,
         "off": CMD_POWER_OFF,
+        "power_toggle": CMD_POWER_TOGGLE,
+        "toggle": CMD_POWER_TOGGLE,
+        "ligar_desligar": CMD_POWER_TOGGLE,
     }
 
     result = CodeParseResult()
@@ -524,6 +530,9 @@ def build_tv_definition(
         CMD_POWER_OFF: parsed.commands.get(CMD_POWER_OFF),
         CMD_POWER_ON: parsed.commands.get(CMD_POWER_ON),
     }
+    toggle = parsed.commands.get(CMD_POWER_TOGGLE)
+    if toggle:
+        commands[CMD_POWER_TOGGLE] = toggle
     return {
         "id": device_id,
         "brand": brand,

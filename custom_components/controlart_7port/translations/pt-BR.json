@@ -117,7 +117,7 @@
         },
         "new_codes_tv": {
           "title": "Cole os códigos IR",
-          "description": "Cole um código por linha. Use `power_on` e `power_off` para ligar/desligar. Qualquer outro nome vira um source.\n\nExemplo:\n{example}",
+          "description": "Cole um código por linha. Use `power_on` e `power_off` para ligar/desligar. Se o controle tiver uma tecla única de power, use `power_toggle`: ele só é enviado quando a entidade nativa da TV está indisponível; nos demais casos, quem liga a TV é a integração nativa. Qualquer outro nome vira um source.\n\nExemplo:\n{example}",
           "data": {
             "codes": "Códigos (um por linha)"
           }
