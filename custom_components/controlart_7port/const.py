@@ -45,11 +45,13 @@ DEVICE_TYPE_CLIMATE = "climate"
 DEVICE_TYPE_TV = "tv"
 DEVICE_TYPE_COVER = "cover"
 DEVICE_TYPE_FLAP = "flap"
+DEVICE_TYPE_COMMAND = "command"
 SUPPORTED_DEVICE_TYPES = [
     DEVICE_TYPE_CLIMATE,
     DEVICE_TYPE_TV,
     DEVICE_TYPE_COVER,
     DEVICE_TYPE_FLAP,
+    DEVICE_TYPE_COMMAND,
 ]
 
 # Configuração de TV / Receiver / Speaker.
@@ -58,6 +60,10 @@ CONF_MEDIA_PLAYER_CLASS = "media_player_class"
 
 # Configuração de cortina/persiana.
 CONF_WINDOW_SENSOR = "window_sensor"
+
+# Comando avulso exposto como action (controlart_7port.<service>).
+CONF_COMMAND = "command"
+CONF_SERVICE = "service"
 
 # Comportamentos de ligar.
 POWER_STATEFUL = "stateful"      # o código de estado já liga o aparelho

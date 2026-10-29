@@ -20,8 +20,9 @@ from homeassistant.config_entries import (
     ConfigSubentryFlow,
     SubentryFlowResult,
 )
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
+from homeassistant.util import slugify
 
 from .const import (
     CMD_CLOSE,
@@ -30,6 +31,7 @@ from .const import (
     CMD_UP,
     CONF_BACKING_ENTITY,
     CONF_BRAND,
+    CONF_COMMAND,
     CONF_MEDIA_PLAYER_CLASS,
     CONF_DEVICE_ID,
     CONF_DEVICE_TYPE,
@@ -46,11 +48,13 @@ from .const import (
     CONF_POWER_BEHAVIOR,
     CONF_POWER_SENSOR,
     CONF_POWER_THRESHOLD,
+    CONF_SERVICE,
     CONF_WINDOW_SENSOR,
     DEFAULT_ON_DELAY,
     DEFAULT_PORT,
     DEFAULT_POWER_THRESHOLD,
     DEVICE_TYPE_CLIMATE,
+    DEVICE_TYPE_COMMAND,
     DEVICE_TYPE_COVER,
     DEVICE_TYPE_FLAP,
     DEVICE_TYPE_TV,
@@ -188,6 +192,9 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
         """Passo inicial: escolha do tipo de dispositivo."""
         if user_input is not None:
             self._device_type = user_input[CONF_DEVICE_TYPE]
+            # Comando avulso não tem definição de marca/modelo.
+            if self._device_type == DEVICE_TYPE_COMMAND:
+                return await self.async_step_configure_command()
             return await self.async_step_brand()
 
         schema = vol.Schema(
@@ -201,6 +208,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
                             DEVICE_TYPE_TV,
                             DEVICE_TYPE_COVER,
                             DEVICE_TYPE_FLAP,
+                            DEVICE_TYPE_COMMAND,
                         ],
                         translation_key="device_type",
                     )
@@ -941,6 +949,61 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             description_placeholders={"device": definition.label},
         )
 
+    # -- Comando avulso (action) ----------------------------------------------
+
+    async def async_step_configure_command(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Cadastra um comando avulso exposto como action."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            data, errors = _command_data(self.hass, user_input, exclude=None)
+            if not errors:
+                return self.async_create_entry(
+                    title=user_input[CONF_NAME].strip(), data=data
+                )
+
+        return self.async_show_form(
+            step_id="configure_command",
+            data_schema=self.add_suggested_values_to_schema(
+                _COMMAND_SCHEMA, user_input
+            ),
+            errors=errors,
+        )
+
+    async def async_step_reconfigure_command(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edita um comando avulso já cadastrado."""
+        subentry = self._get_reconfigure_subentry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            data, errors = _command_data(
+                self.hass, user_input, exclude=subentry.subentry_id
+            )
+            if not errors:
+                return self.async_update_and_abort(
+                    self._get_entry(),
+                    subentry,
+                    title=user_input[CONF_NAME].strip(),
+                    data=data,
+                )
+
+        suggested = user_input or {
+            CONF_NAME: subentry.title,
+            CONF_COMMAND: subentry.data.get(CONF_COMMAND, ""),
+        }
+        return self.async_show_form(
+            step_id="reconfigure_command",
+            data_schema=self.add_suggested_values_to_schema(
+                _COMMAND_SCHEMA, suggested
+            ),
+            errors=errors,
+            description_placeholders={
+                "service": f"{DOMAIN}.{subentry.data.get(CONF_SERVICE, '')}"
+            },
+        )
+
     # -- Reconfiguração de um aparelho existente (climate) -----------------
 
     async def async_step_reconfigure(
@@ -955,6 +1018,8 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             return await self.async_step_reconfigure_cover(user_input)
         if device_type == DEVICE_TYPE_FLAP:
             return await self.async_step_reconfigure_flap(user_input)
+        if device_type == DEVICE_TYPE_COMMAND:
+            return await self.async_step_reconfigure_command(user_input)
 
         database = await async_get_database(self.hass)
         definition = database.get(subentry.data.get(CONF_DEVICE_ID, ""))
@@ -1001,6 +1066,55 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             data_schema=schema,
             description_placeholders={"device": definition.label},
         )
+
+
+_COMMAND_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_NAME): str,
+        vol.Required(CONF_COMMAND): selector.TextSelector(),
+    }
+)
+
+
+def _command_data(
+    hass: HomeAssistant, user_input: dict[str, Any], exclude: str | None
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Valida nome e comando e monta os dados do subentry de comando avulso."""
+    name = user_input[CONF_NAME].strip()
+    command = user_input[CONF_COMMAND].strip().strip('"').strip("'").strip()
+    errors: dict[str, str] = {}
+
+    # O slugify do HA devolve "unknown" para textos sem letra nem número.
+    service = slugify(name) if any(c.isalnum() for c in name) else ""
+    if not service:
+        errors[CONF_NAME] = "invalid_command_name"
+    elif _command_service_taken(hass, service, exclude):
+        errors[CONF_NAME] = "command_name_taken"
+    if not command:
+        errors[CONF_COMMAND] = "empty_command"
+
+    data = {
+        CONF_DEVICE_TYPE: DEVICE_TYPE_COMMAND,
+        CONF_SERVICE: service,
+        CONF_COMMAND: command,
+    }
+    return data, errors
+
+
+def _command_service_taken(
+    hass: HomeAssistant, service: str, exclude: str | None
+) -> bool:
+    """Indica se outro comando avulso, de qualquer 7Port, já usa a action."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        for subentry_id, subentry in entry.subentries.items():
+            if subentry_id == exclude:
+                continue
+            if (
+                subentry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_COMMAND
+                and subentry.data.get(CONF_SERVICE) == service
+            ):
+                return True
+    return False
 
 
 def _build_configure_schema(
