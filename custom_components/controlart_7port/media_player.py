@@ -43,6 +43,7 @@ from . import SevenPortConfigEntry
 from .const import (
     CMD_POWER_OFF,
     CMD_POWER_ON,
+    CMD_POWER_TOGGLE,
     CONF_BACKING_ENTITY,
     CONF_DEVICE_ID,
     CONF_DEVICE_TYPE,
@@ -260,7 +261,20 @@ class SevenPortTV(MediaPlayerEntity, RestoreEntity):
         O nativo vai sempre, como redundância: o IR pode ser entregue pela
         7Port e mesmo assim não ligar a TV (emissor fora de posição), e a
         7Port pode estar inacessível.
+
+        Com ``power_toggle`` a redundância não se aplica: o toggle com a TV já
+        ligada a desligaria. Ele só é enviado quando a entidade nativa está
+        unavailable/unknown, o único caso em que a TV não responde pela rede.
         """
+        toggle = self._definition.command(CMD_POWER_TOGGLE)
+        if toggle:
+            state = self.hass.states.get(self._backing_entity_id)
+            if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                await self._async_send_ir_code(toggle)
+            elif self._backing_supports(MediaPlayerEntityFeature.TURN_ON):
+                await self._async_call_backing("turn_on")
+            return
+
         code = self._definition.command(CMD_POWER_ON)
         if code:
             await self._async_send_ir_code(code)

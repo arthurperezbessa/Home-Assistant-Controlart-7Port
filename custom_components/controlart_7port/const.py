@@ -78,6 +78,7 @@ SWING_MODES_DB = [SWING_NONE, SWING_SEPARATE]
 # Chaves de comando padrão.
 CMD_POWER_OFF = "power_off"
 CMD_POWER_ON = "power_on"
+CMD_POWER_TOGGLE = "power_toggle"
 CMD_LIGHT_OFF = "light_off"
 CMD_SWING_ON = "swing_on"
 CMD_SWING_OFF = "swing_off"

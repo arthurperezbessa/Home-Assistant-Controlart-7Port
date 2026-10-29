@@ -117,7 +117,7 @@
         },
         "new_codes_tv": {
           "title": "Paste the IR codes",
-          "description": "Paste one code per line. Use `power_on` and `power_off` for power commands. Any other name becomes a source.\n\nExample:\n{example}",
+          "description": "Paste one code per line. Use `power_on` and `power_off` for power commands. If the remote has a single power key, use `power_toggle` instead: it is sent only when the TV's native entity is unavailable, and otherwise the native integration turns the TV on. Any other name becomes a source.\n\nExample:\n{example}",
           "data": {
             "codes": "Codes (one per line)"
           }
