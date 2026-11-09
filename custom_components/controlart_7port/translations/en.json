@@ -214,6 +214,13 @@
             "command": "Command"
           }
         },
+        "configure_command_bulk": {
+          "title": "Raw commands in bulk",
+          "description": "Paste one command per line in the format `name: command`, for example:\n\n`vivo_ok: sendir,1:3,1,36045,1,1,96,32,...`\n\nEach line becomes a separate raw command, exactly like one added on its own: the name becomes the action (`vivo_ok` → `controlart_7port.vivo_ok`) and the command is sent to the 7Port exactly as typed. Empty lines and lines starting with `#` are ignored. If any line has a problem, nothing is created.",
+          "data": {
+            "commands": "Commands"
+          }
+        },
         "reconfigure_command": {
           "title": "Edit raw command",
           "description": "Current action: `{service}`.\n\nRenaming changes the action name, and automations that call the old name stop working. The command is sent to the 7Port exactly as typed.",
@@ -232,10 +239,13 @@
         "flap_missing_codes": "The `up` and `down` codes are required.",
         "invalid_command_name": "The name must contain at least one letter or number.",
         "command_name_taken": "Another raw command already uses this action name. Choose a different name.",
-        "empty_command": "Enter the command to send."
+        "empty_command": "Enter the command to send.",
+        "bulk_invalid": "Nothing was created. Fix these lines: {details}",
+        "bulk_empty": "No commands found. Paste one command per line: `name: command`."
       },
       "abort": {
-        "unknown_device": "The device definition could not be found."
+        "unknown_device": "The device definition could not be found.",
+        "commands_created": "{count} raw commands created. Each one is now an action `controlart_7port.<name>` and can be edited or removed on its own."
       }
     }
   },
@@ -261,7 +271,8 @@
         "tv": "Smart TV",
         "cover": "Cover / Blind",
         "flap": "TV flap / mount",
-        "command": "Raw command (action)"
+        "command": "Raw command (action)",
+        "command_bulk": "Raw commands — paste several at once (actions)"
       }
     },
     "power_behavior": {

@@ -214,6 +214,13 @@
             "command": "Comando"
           }
         },
+        "configure_command_bulk": {
+          "title": "Comandos avulsos em lote",
+          "description": "Cole um comando por linha no formato `nome: comando`, por exemplo:\n\n`vivo_ok: sendir,1:3,1,36045,1,1,96,32,...`\n\nCada linha vira um comando avulso separado, igual ao cadastrado um por um: o nome vira a action (`vivo_ok` → `controlart_7port.vivo_ok`) e o comando é enviado para a 7Port exatamente como está. Linhas vazias e iniciadas por `#` são ignoradas. Se alguma linha tiver problema, nada é criado.",
+          "data": {
+            "commands": "Comandos"
+          }
+        },
         "reconfigure_command": {
           "title": "Editar comando avulso",
           "description": "Action atual: `{service}`.\n\nMudar o nome muda o nome da action, e automações que chamam o nome antigo deixam de funcionar. O comando é enviado para a 7Port exatamente como está.",
@@ -232,10 +239,13 @@
         "flap_missing_codes": "Os códigos `up` (subir) e `down` (descer) são obrigatórios.",
         "invalid_command_name": "O nome precisa ter ao menos uma letra ou número.",
         "command_name_taken": "Outro comando avulso já usa esse nome de action. Escolha um nome diferente.",
-        "empty_command": "Informe o comando a ser enviado."
+        "empty_command": "Informe o comando a ser enviado.",
+        "bulk_invalid": "Nada foi criado. Corrija estas linhas: {details}",
+        "bulk_empty": "Nenhum comando encontrado. Cole um comando por linha: `nome: comando`."
       },
       "abort": {
-        "unknown_device": "A definição do dispositivo não foi encontrada."
+        "unknown_device": "A definição do dispositivo não foi encontrada.",
+        "commands_created": "{count} comandos avulsos criados. Cada um virou uma action `controlart_7port.<nome>` e pode ser editado ou removido individualmente."
       }
     }
   },
@@ -261,7 +271,8 @@
         "tv": "Smart TV",
         "cover": "Cortina / Persiana",
         "flap": "Flap / Suporte de TV",
-        "command": "Comando avulso (action)"
+        "command": "Comando avulso (action)",
+        "command_bulk": "Comandos avulsos — colar vários de uma vez (actions)"
       }
     },
     "power_behavior": {
