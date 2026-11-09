@@ -54,6 +54,10 @@ SUPPORTED_DEVICE_TYPES = [
     DEVICE_TYPE_COMMAND,
 ]
 
+# Opção do fluxo que cadastra vários comandos avulsos de uma vez. Não é um
+# tipo armazenado: cada linha colada vira um subentry DEVICE_TYPE_COMMAND.
+FLOW_COMMAND_BULK = "command_bulk"
+
 # Configuração de TV / Receiver / Speaker.
 CONF_BACKING_ENTITY = "backing_entity"
 CONF_MEDIA_PLAYER_CLASS = "media_player_class"
@@ -63,6 +67,7 @@ CONF_WINDOW_SENSOR = "window_sensor"
 
 # Comando avulso exposto como action (controlart_7port.<service>).
 CONF_COMMAND = "command"
+CONF_COMMANDS = "commands"
 CONF_SERVICE = "service"
 
 # Comportamentos de ligar.

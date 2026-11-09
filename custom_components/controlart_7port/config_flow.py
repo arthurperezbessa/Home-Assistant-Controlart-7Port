@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+from types import MappingProxyType
 from typing import Any
 
 import voluptuous as vol
@@ -17,6 +18,7 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
+    ConfigSubentry,
     ConfigSubentryFlow,
     SubentryFlowResult,
 )
@@ -32,6 +34,7 @@ from .const import (
     CONF_BACKING_ENTITY,
     CONF_BRAND,
     CONF_COMMAND,
+    CONF_COMMANDS,
     CONF_MEDIA_PLAYER_CLASS,
     CONF_DEVICE_ID,
     CONF_DEVICE_TYPE,
@@ -59,6 +62,7 @@ from .const import (
     DEVICE_TYPE_FLAP,
     DEVICE_TYPE_TV,
     DOMAIN,
+    FLOW_COMMAND_BULK,
     LIGHT_OFF_BEHAVIORS,
     LIGHT_OFF_NEVER,
     MAX_IR_PORT,
@@ -195,6 +199,8 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             # Comando avulso não tem definição de marca/modelo.
             if self._device_type == DEVICE_TYPE_COMMAND:
                 return await self.async_step_configure_command()
+            if self._device_type == FLOW_COMMAND_BULK:
+                return await self.async_step_configure_command_bulk()
             return await self.async_step_brand()
 
         schema = vol.Schema(
@@ -209,6 +215,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
                             DEVICE_TYPE_COVER,
                             DEVICE_TYPE_FLAP,
                             DEVICE_TYPE_COMMAND,
+                            FLOW_COMMAND_BULK,
                         ],
                         translation_key="device_type",
                     )
@@ -971,6 +978,81 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             errors=errors,
         )
 
+    async def async_step_configure_command_bulk(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Cadastra vários comandos avulsos colados de uma vez.
+
+        Cada linha ``nome: comando`` vira um subentry de comando avulso,
+        idêntico ao criado pelo formulário de um comando. É tudo ou nada:
+        se alguma linha tiver problema, nenhum comando é criado.
+        """
+        errors: dict[str, str] = {}
+        placeholders = {"details": ""}
+        if user_input is not None:
+            commands, problems = _parse_command_block(
+                self.hass, user_input[CONF_COMMANDS]
+            )
+            if problems:
+                errors["base"] = "bulk_invalid"
+                shown = problems[:_MAX_BULK_PROBLEMS]
+                if len(problems) > len(shown):
+                    shown.append(f"… e mais {len(problems) - len(shown)}")
+                placeholders["details"] = "; ".join(shown)
+            elif not commands:
+                errors["base"] = "bulk_empty"
+            else:
+                self._async_add_command_subentries(commands)
+                return self.async_abort(
+                    reason="commands_created",
+                    description_placeholders={"count": str(len(commands))},
+                )
+
+        return self.async_show_form(
+            step_id="configure_command_bulk",
+            data_schema=self.add_suggested_values_to_schema(
+                _COMMAND_BULK_SCHEMA, user_input
+            ),
+            errors=errors,
+            description_placeholders=placeholders,
+        )
+
+    @callback
+    def _async_add_command_subentries(
+        self, commands: list[tuple[str, dict[str, Any]]]
+    ) -> None:
+        """Adiciona os subentries de comando recarregando a 7Port uma vez só.
+
+        Cada subentry adicionado dispara o update listener, que recarrega a
+        entrada; com dezenas de comandos seriam dezenas de recargas seguidas.
+        O listener fica suspenso enquanto os subentries entram e a recarga é
+        agendada uma única vez no fim. ``call_soon`` roda depois dos listeners
+        já enfileirados, então eles ainda veem a suspensão ativa.
+        """
+        entry = self._get_entry()
+        runtime = getattr(entry, "runtime_data", None)
+        if runtime is not None:
+            runtime.suspend_reload = True
+        for title, data in commands:
+            self.hass.config_entries.async_add_subentry(
+                entry,
+                ConfigSubentry(
+                    data=MappingProxyType(data),
+                    subentry_type=SUBENTRY_TYPE_DEVICE,
+                    title=title,
+                    unique_id=None,
+                ),
+            )
+        if runtime is None:
+            return
+
+        @callback
+        def _resume() -> None:
+            runtime.suspend_reload = False
+            self.hass.config_entries.async_schedule_reload(entry.entry_id)
+
+        self.hass.loop.call_soon(_resume)
+
     async def async_step_reconfigure_command(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
@@ -1099,6 +1181,72 @@ def _command_data(
         CONF_COMMAND: command,
     }
     return data, errors
+
+
+_COMMAND_BULK_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_COMMANDS): selector.TextSelector(
+            selector.TextSelectorConfig(multiline=True)
+        ),
+    }
+)
+
+# Quantos problemas listar no erro do cadastro em lote antes de resumir.
+_MAX_BULK_PROBLEMS = 8
+
+# Motivo legível de cada erro de _command_data, para o relatório por linha.
+_BULK_REASONS = {
+    "invalid_command_name": "nome sem letra ou número",
+    "command_name_taken": "já existe a action {service}",
+    "empty_command": "comando vazio",
+}
+
+
+def _parse_command_block(
+    hass: HomeAssistant, text: str
+) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
+    """Lê linhas ``nome: comando`` e valida cada uma como um comando avulso.
+
+    Retorna ``(comandos, problemas)``: ``comandos`` são pares
+    ``(título, dados do subentry)`` e ``problemas`` descreve cada linha
+    recusada. Linhas vazias e iniciadas por ``#`` são ignoradas. O nome vai
+    até o primeiro ``:``; o resto da linha é o comando (que pode ter ``:``,
+    como em ``sendir,1:3,...``).
+    """
+    commands: list[tuple[str, dict[str, Any]]] = []
+    problems: list[str] = []
+    seen: dict[str, int] = {}
+    for lineno, raw in enumerate(text.splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, sep, command = line.partition(":")
+        # Sem nome, "sendir,1:3,..." partiria no ":" da porta e criaria uma
+        # action "sendir_1" — recusa em vez de aceitar algo sem sentido.
+        if not sep or name.strip().lower().startswith(("sendir", "sendrf")):
+            problems.append(f"linha {lineno}: use o formato nome: comando")
+            continue
+        data, errors = _command_data(
+            hass, {CONF_NAME: name, CONF_COMMAND: command}, exclude=None
+        )
+        if errors:
+            service = f"{DOMAIN}.{data[CONF_SERVICE]}"
+            reasons = ", ".join(
+                _BULK_REASONS[err].format(service=service)
+                for err in errors.values()
+            )
+            problems.append(f"linha {lineno}: {reasons}")
+            continue
+        service = data[CONF_SERVICE]
+        if service in seen:
+            problems.append(
+                f"linha {lineno}: mesma action da linha {seen[service]} "
+                f"({DOMAIN}.{service})"
+            )
+            continue
+        seen[service] = lineno
+        commands.append((name.strip(), data))
+    return commands, problems
 
 
 def _command_service_taken(

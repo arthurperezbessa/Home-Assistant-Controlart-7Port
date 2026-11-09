@@ -38,6 +38,9 @@ class SevenPortRuntimeData:
     def __init__(self, client: SevenPortClient) -> None:
         """Inicializa os dados de runtime."""
         self.client = client
+        # Ligado pelo cadastro de comandos em lote, que adiciona vários
+        # subentries e agenda uma única recarga no fim.
+        self.suspend_reload = False
 
 
 async def async_setup_entry(
@@ -85,4 +88,6 @@ async def _async_update_listener(
     Adicionar/editar/remover um aparelho (subentry) dispara este listener,
     fazendo as plataformas reavaliarem a lista de dispositivos.
     """
+    if entry.runtime_data.suspend_reload:
+        return
     await hass.config_entries.async_reload(entry.entry_id)
