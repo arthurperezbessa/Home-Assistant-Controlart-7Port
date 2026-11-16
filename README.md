@@ -124,6 +124,24 @@ Ao escolher **Criar nova definição** no passo de marca/modelo:
 > no log do Home Assistant. Você pode copiar esse YAML para a pasta
 > `devices/` deste repositório e contribuir com o banco de dados embutido.
 
+### 4. Cortina com entidade principal (fallback)
+
+Ao configurar uma **Cortina / Persiana**, o campo opcional **Cortina
+principal** recebe uma cortina já integrada ao Home Assistant (por exemplo, o
+motor Tuya Wi-Fi da mesma cortina). Com ele preenchido:
+
+- Enquanto a principal está disponível, abrir, fechar, parar e posição são
+  enviados **para ela**, e a cortina da 7Port espelha o estado, a posição e as
+  funções dela.
+- Quando a principal fica `unavailable` ou `unknown`, os mesmos comandos saem
+  pelos códigos IR/RF da 7Port, com estado otimista a partir do último estado
+  conhecido da principal. Nesse modo só existem abrir, fechar e parar.
+- O sensor de janela vale nos dois caminhos: com a janela aberta, fechar (ou
+  levar a uma posição abaixo da atual) é bloqueado.
+
+Use a cortina da 7Port no dashboard, nas cenas e nos grupos; a principal fica
+só como caminho de comando.
+
 ## Banco de dados de aparelhos
 
 | Arquivo | Marca | Modelo | Observações |
