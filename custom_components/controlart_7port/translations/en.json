@@ -163,7 +163,8 @@
           "data": {
             "name": "Name",
             "ir_port": "7Port IR output (1-7, or 8 = internal Blaster; ignored for RF codes)",
-            "window_sensor": "Window sensor (blocks closing when window is open)"
+            "window_sensor": "Window sensor (blocks closing when window is open)",
+            "primary_entity": "Primary cover (e.g. Tuya); 7Port codes are only sent when it is unavailable"
           }
         },
         "reconfigure_cover": {
@@ -172,7 +173,8 @@
           "data": {
             "name": "Name",
             "ir_port": "7Port IR output (1-7, or 8 = internal Blaster; ignored for RF codes)",
-            "window_sensor": "Window sensor (blocks closing when window is open)"
+            "window_sensor": "Window sensor (blocks closing when window is open)",
+            "primary_entity": "Primary cover (e.g. Tuya); 7Port codes are only sent when it is unavailable"
           }
         },
         "new_meta_flap": {

@@ -51,6 +51,7 @@ from .const import (
     CONF_POWER_BEHAVIOR,
     CONF_POWER_SENSOR,
     CONF_POWER_THRESHOLD,
+    CONF_PRIMARY_ENTITY,
     CONF_SERVICE,
     CONF_WINDOW_SENSOR,
     DEFAULT_ON_DELAY,
@@ -757,7 +758,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
     async def async_step_configure_cover(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Configura porta IR e sensor de janela opcional da cortina."""
+        """Configura porta IR, sensor de janela e entidade principal da cortina."""
         database = await async_get_database(self.hass)
         definition = database.get(self._device_id or "")
         if definition is None:
@@ -771,6 +772,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
                 CONF_MODEL: definition.model,
                 CONF_IR_PORT: user_input[CONF_IR_PORT],
                 CONF_WINDOW_SENSOR: user_input.get(CONF_WINDOW_SENSOR) or None,
+                CONF_PRIMARY_ENTITY: user_input.get(CONF_PRIMARY_ENTITY) or None,
             }
             return self.async_create_entry(
                 title=user_input[CONF_NAME].strip(), data=data
@@ -799,6 +801,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
                 {
                     CONF_IR_PORT: user_input[CONF_IR_PORT],
                     CONF_WINDOW_SENSOR: user_input.get(CONF_WINDOW_SENSOR) or None,
+                    CONF_PRIMARY_ENTITY: user_input.get(CONF_PRIMARY_ENTITY) or None,
                 }
             )
             return self.async_update_and_abort(
@@ -1407,6 +1410,14 @@ def _build_configure_schema_cover(
                 },
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
+            vol.Optional(
+                CONF_PRIMARY_ENTITY,
+                description={
+                    "suggested_value": defaults.get(CONF_PRIMARY_ENTITY)
+                },
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="cover")
             ),
         }
     )

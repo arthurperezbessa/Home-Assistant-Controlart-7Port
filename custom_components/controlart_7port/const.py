@@ -64,6 +64,9 @@ CONF_MEDIA_PLAYER_CLASS = "media_player_class"
 
 # Configuração de cortina/persiana.
 CONF_WINDOW_SENSOR = "window_sensor"
+# Cortina já integrada (ex.: Tuya) usada como caminho principal; os códigos
+# da 7Port só são enviados quando ela está indisponível.
+CONF_PRIMARY_ENTITY = "primary_entity"
 
 # Comando avulso exposto como action (controlart_7port.<service>).
 CONF_COMMAND = "command"
